@@ -8,7 +8,14 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math/rand"
 	"os"
+)
+
+const (
+	Chunks    = 8
+	ChunkSize = 64
+	CASize    = Chunks * ChunkSize
 )
 
 type CA struct {
@@ -17,19 +24,21 @@ type CA struct {
 }
 
 func main() {
+	rand.Seed(1)
 	ca := CA{
 		Rule:  110,
-		State: make([]uint64, 8),
-		Next:  make([]uint64, 8),
+		State: make([]uint64, Chunks),
+		Next:  make([]uint64, Chunks),
 	}
-	ca.State[7] = 0x8000000000000000
-	fmt.Println(ca.String())
-	iterations := 1000
-	gray, count := image.NewGray(image.Rect(0, 0, 8 * 64, iterations)), 0
+	for j := range ca.State {
+		ca.State[j] = rand.Uint64()
+	}
+	iterations := 12000
+	gray, count := image.NewGray(image.Rect(0, 0, CASize, iterations)), 0
 	for i := 0; i < iterations; i++ {
 		for _, s := range ca.State {
-			for j := 0; j < 64; j++ {
-				if s & 0x1 == 0 {
+			for j := 0; j < ChunkSize; j++ {
+				if s&0x1 == 0 {
 					gray.Pix[count] = 0
 				} else {
 					gray.Pix[count] = 0xFF
@@ -58,7 +67,7 @@ func (ca *CA) Step() {
 	length := len(state)
 	index, out := state[length-1]>>63, 0
 	for i, s := range state {
-		c := 64
+		c := ChunkSize
 		if i == 0 {
 			index = ((index << 1) & 0x7) | (s & 0x1)
 			s >>= 1
@@ -68,13 +77,13 @@ func (ca *CA) Step() {
 		for c > 0 {
 			index = ((index << 1) & 0x7) | (s & 0x1)
 			s >>= 1
-			next[out/64] |= uint64((rule >> index) & 0x1) << uint(out%64)
+			next[out>>6] |= uint64((rule>>index)&0x1) << uint(out&0x3F)
 			c--
 			out++
 		}
 	}
 	index = ((index << 1) & 0x7) | (state[0] & 0x1)
-	next[out/64] |= uint64((rule >> index) & 0x1) << uint(out%64)
+	next[out>>6] |= uint64((rule>>index)&0x1) << uint(out&0x3F)
 	ca.State, ca.Next = next, state
 }
 
