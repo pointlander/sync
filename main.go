@@ -23,31 +23,56 @@ type CA struct {
 	State, Next []uint64
 }
 
+func NewCA(rule uint8, size int) CA {
+	state := make([]uint64, size)
+	for j := range state {
+		state[j] = rand.Uint64()
+	}
+	return CA{
+		Rule:  rule,
+		State: state,
+		Next:  make([]uint64, size),
+	}
+}
+
 func main() {
 	rand.Seed(1)
-	ca := CA{
-		Rule:  110,
-		State: make([]uint64, Chunks),
-		Next:  make([]uint64, Chunks),
+	iterations, nodes := 12000, make([]CA, 2)
+	for i := range nodes {
+		nodes[i] = NewCA(110, Chunks)
 	}
-	for j := range ca.State {
-		ca.State[j] = rand.Uint64()
-	}
-	iterations := 12000
-	gray, count := image.NewGray(image.Rect(0, 0, CASize, iterations)), 0
+	gray, count := image.NewGray(image.Rect(0, 0, 2 * CASize + 3, iterations)), 0
 	for i := 0; i < iterations; i++ {
-		for _, s := range ca.State {
-			for j := 0; j < ChunkSize; j++ {
-				if s&0x1 == 0 {
-					gray.Pix[count] = 0
-				} else {
-					gray.Pix[count] = 0xFF
+		for n := range nodes {
+			for _, s := range nodes[n].State {
+				for j := 0; j < ChunkSize; j++ {
+					if s&0x1 == 0 {
+						gray.Pix[count] = 0
+					} else {
+						gray.Pix[count] = 0xFF
+					}
+					s >>= 1
+					count++
 				}
-				s >>= 1
+			}
+			if n == 0 {
+				gray.Pix[count] = 0
+				count++
+				gray.Pix[count] = 0xFF
+				count++
+				gray.Pix[count] = 0
 				count++
 			}
 		}
-		ca.Step()
+		if rand.Float64() < .01 {
+			//a, b := rand.Intn(Chunks), rand.Intn(Chunks)
+			//nodes[0].State[a], nodes[1].State[b] = nodes[1].State[b], nodes[0].State[a]
+			a := rand.Intn(Chunks)
+			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
+		}
+		for n := range nodes {
+			nodes[n].Step()
+		}
 		fmt.Printf("iteration: %d\n", i)
 	}
 
