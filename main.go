@@ -5,6 +5,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/png"
@@ -45,7 +46,21 @@ func NewCA(rule uint8, size int) CA {
 	}
 }
 
+var options = struct {
+	bench *bool
+}{
+	bench: flag.Bool("bench", false, "run the test bench"),
+}
+
 func main() {
+	flag.Parse()
+
+	if *options.bench {
+		bench()
+	}
+}
+
+func bench() {
 	rand.Seed(1)
 	iterations, nodes := 12000, make([]CA, 2)
 	for i := range nodes {
@@ -82,13 +97,12 @@ func main() {
 		} else if rnd < nodes[1].Spike {
 			a := rand.Intn(Chunks)
 			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire 1: %d %f\n", i, nodes[1].Spike)			
+			fmt.Printf("fire 1: %d %f\n", i, nodes[1].Spike)
 		}
 		for n := range nodes {
 			next = nodes[n].Step(next)
 		}
 		points = append(points, plotter.XY{X: float64(i), Y: nodes[0].Spike})
-		//fmt.Printf("iteration: %d %f %f\n", i, nodes[0].Entropy, nodes[1].Entropy)
 	}
 
 	out, err := os.Create("ca.png")
@@ -106,9 +120,9 @@ func main() {
 		panic(err)
 	}
 
-	p.Title.Text = "entropy"
+	p.Title.Text = "complexity"
 	p.X.Label.Text = "time"
-	p.Y.Label.Text = "entropy"
+	p.Y.Label.Text = "complexity"
 
 	scatter, err := plotter.NewScatter(points)
 	if err != nil {
@@ -118,14 +132,14 @@ func main() {
 	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
 	p.Add(scatter)
 
-	err = p.Save(8*vg.Inch, 8*vg.Inch, "entropy.png")
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "complexity.png")
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (ca *CA) Step(next []uint64) []uint64 {
-	rule, state, histogram, on := ca.Rule, ca.State, [8]uint64{}, uint64(0)
+	rule, state, on := ca.Rule, ca.State, uint64(0)
 	length := len(state)
 	index, out := state[length-1]>>63, 0
 	for i, s := range state {
@@ -138,7 +152,6 @@ func (ca *CA) Step(next []uint64) []uint64 {
 		next[i] = 0
 		for c > 0 {
 			index = ((index << 1) & 0x7) | (s & 0x1)
-			histogram[index]++
 			s >>= 1
 			bit := uint64((rule >> index) & 0x1)
 			on += bit
@@ -148,7 +161,6 @@ func (ca *CA) Step(next []uint64) []uint64 {
 		}
 	}
 	index = ((index << 1) & 0x7) | (state[0] & 0x1)
-	histogram[index]++
 	bit := uint64((rule >> index) & 0x1)
 	on += bit
 	next[out>>6] |= bit << uint(out&0x3F)
@@ -159,12 +171,6 @@ func (ca *CA) Step(next []uint64) []uint64 {
 	complexity = complexity + Alpha*(math.Abs(float64(on)-low)-complexity)
 	ca.Low, ca.Complexity, ca.Spike = low, complexity, math.Exp(-complexity)
 
-	entropy := 0.0
-	for _, i := range histogram {
-		p := float64(i) / 512
-		entropy += p * math.Log2(p)
-	}
-	ca.Entropy = -entropy
 	return state
 }
 
