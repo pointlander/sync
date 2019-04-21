@@ -22,12 +22,15 @@ const (
 	Chunks    = 8
 	ChunkSize = 64
 	CASize    = Chunks * ChunkSize
+	Alpha     = 0.08
 )
 
 type CA struct {
-	Rule    uint8
-	State   []uint64
-	Entropy float64
+	Rule                   uint8
+	State                  []uint64
+	Entropy                float64
+	On                     uint64
+	Low, Complexity, Spike float64
 }
 
 func NewCA(rule uint8, size int) CA {
@@ -38,6 +41,7 @@ func NewCA(rule uint8, size int) CA {
 	return CA{
 		Rule:  rule,
 		State: state,
+		Low:   CASize / 2,
 	}
 }
 
@@ -71,17 +75,19 @@ func main() {
 				count++
 			}
 		}
-		if rnd := rand.Float64() * 32; rnd < nodes[0].Entropy || rnd < nodes[1].Entropy {
-			//a, b := rand.Intn(Chunks), rand.Intn(Chunks)
-			//nodes[0].State[a], nodes[1].State[b] = nodes[1].State[b], nodes[0].State[a]
+		if rnd := rand.Float64() * 64; rnd < nodes[0].Spike {
 			a := rand.Intn(Chunks)
 			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire: %d %f %f\n", i, nodes[0].Entropy, nodes[1].Entropy)
+			fmt.Printf("fire 0: %d %f\n", i, nodes[0].Spike)
+		} else if rnd < nodes[1].Spike {
+			a := rand.Intn(Chunks)
+			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
+			fmt.Printf("fire 1: %d %f\n", i, nodes[1].Spike)			
 		}
 		for n := range nodes {
 			next = nodes[n].Step(next)
 		}
-		points = append(points, plotter.XY{X: float64(i), Y: nodes[0].Entropy})
+		points = append(points, plotter.XY{X: float64(i), Y: nodes[0].Spike})
 		//fmt.Printf("iteration: %d %f %f\n", i, nodes[0].Entropy, nodes[1].Entropy)
 	}
 
@@ -119,7 +125,7 @@ func main() {
 }
 
 func (ca *CA) Step(next []uint64) []uint64 {
-	rule, state, histogram := ca.Rule, ca.State, [8]uint64{}
+	rule, state, histogram, on := ca.Rule, ca.State, [8]uint64{}, uint64(0)
 	length := len(state)
 	index, out := state[length-1]>>63, 0
 	for i, s := range state {
@@ -134,22 +140,31 @@ func (ca *CA) Step(next []uint64) []uint64 {
 			index = ((index << 1) & 0x7) | (s & 0x1)
 			histogram[index]++
 			s >>= 1
-			next[out>>6] |= uint64((rule>>index)&0x1) << uint(out&0x3F)
+			bit := uint64((rule >> index) & 0x1)
+			on += bit
+			next[out>>6] |= bit << uint(out&0x3F)
 			c--
 			out++
 		}
 	}
 	index = ((index << 1) & 0x7) | (state[0] & 0x1)
 	histogram[index]++
-	next[out>>6] |= uint64((rule>>index)&0x1) << uint(out&0x3F)
-	ca.State = next
+	bit := uint64((rule >> index) & 0x1)
+	on += bit
+	next[out>>6] |= bit << uint(out&0x3F)
+	ca.State, ca.On = next, on
+
+	low, complexity := ca.Low, ca.Complexity
+	low = low + Alpha*(float64(on)-low)
+	complexity = complexity + Alpha*(math.Abs(float64(on)-low)-complexity)
+	ca.Low, ca.Complexity, ca.Spike = low, complexity, math.Exp(-complexity)
 
 	entropy := 0.0
 	for _, i := range histogram {
 		p := float64(i) / 512
 		entropy += p * math.Log2(p)
 	}
-	ca.Entropy = math.Exp(entropy)
+	ca.Entropy = -entropy
 	return state
 }
 
