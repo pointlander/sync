@@ -20,16 +20,17 @@ import (
 )
 
 const (
-	Chunks    = 8
-	ChunkSize = 64
-	CASize    = Chunks * ChunkSize
-	Alpha     = 0.08
+	Chunks      = 8
+	ChunkSize   = 64
+	CASize      = Chunks * ChunkSize
+	Alpha       = 0.08
+	SpikeFactor = 64
 )
 
 type CA struct {
 	Rule                   uint8
 	State                  []uint64
-	Entropy                float64
+	Connections            []int
 	On                     uint64
 	Low, Complexity, Spike float64
 }
@@ -40,9 +41,10 @@ func NewCA(rule uint8, size int) CA {
 		state[j] = rand.Uint64()
 	}
 	return CA{
-		Rule:  rule,
-		State: state,
-		Low:   CASize / 2,
+		Rule:        rule,
+		State:       state,
+		Connections: make([]int, 0, 8),
+		Low:         CASize / 2,
 	}
 }
 
@@ -57,6 +59,35 @@ func main() {
 
 	if *options.bench {
 		bench()
+		return
+	}
+
+	rand.Seed(1)
+	nodes, next := make([]CA, 8), make([]uint64, Chunks)
+	for i := range nodes {
+		nodes[i] = NewCA(110, Chunks)
+		nodes[i].AddConnection((i + 7) % 8)
+		nodes[i].AddConnection((i + 1) % 8)
+	}
+	generation := 0
+	for {
+		for n := range nodes {
+			if rnd := rand.Float64() * SpikeFactor; rnd < nodes[n].Spike {
+				m, max := 0, 0.0
+				for _, c := range nodes[n].Connections {
+					if complexity := nodes[c].Complexity; complexity > max {
+						m, max = c, complexity
+					}
+				}
+				a := rand.Intn(Chunks)
+				nodes[n].State[a], nodes[m].State[a] = nodes[m].State[a], nodes[n].State[a]
+				fmt.Printf("fire %d: %d %f\n", n, generation, nodes[n].Spike)
+			}
+		}
+		for n := range nodes {
+			next = nodes[n].Step(next)
+		}
+		generation++
 	}
 }
 
@@ -90,7 +121,7 @@ func bench() {
 				count++
 			}
 		}
-		if rnd := rand.Float64() * 64; rnd < nodes[0].Spike {
+		if rnd := rand.Float64() * SpikeFactor; rnd < nodes[0].Spike {
 			a := rand.Intn(Chunks)
 			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
 			fmt.Printf("fire 0: %d %f\n", i, nodes[0].Spike)
@@ -136,6 +167,10 @@ func bench() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (ca *CA) AddConnection(n int) {
+	ca.Connections = append(ca.Connections, n)
 }
 
 func (ca *CA) Step(next []uint64) []uint64 {
