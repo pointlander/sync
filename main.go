@@ -13,6 +13,9 @@ import (
 	"math/rand"
 	"os"
 
+	"gitlab.com/gomidi/midi/mid"
+	"gitlab.com/gomidi/midi/smf"
+	"gitlab.com/gomidi/midi/smf/smfwriter"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -33,6 +36,7 @@ type CA struct {
 	Connections            []int
 	On                     uint64
 	Low, Complexity, Spike float64
+	Note                   uint8
 }
 
 func NewCA(rule uint8, size int) CA {
@@ -62,6 +66,16 @@ func main() {
 		return
 	}
 
+	out, err := os.Create("music.midi")
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	ticks := smf.MetricTicks(1920)
+	wr := mid.NewSMF(out, 1, smfwriter.TimeFormat(ticks))
+	wr.TrackSequenceName("music")
+	defer wr.EndOfTrack()
+
 	rand.Seed(1)
 	nodes, next := make([]CA, 8), make([]uint64, Chunks)
 	for i := range nodes {
@@ -69,8 +83,16 @@ func main() {
 		nodes[i].AddConnection((i + 7) % 8)
 		nodes[i].AddConnection((i + 1) % 8)
 	}
+	nodes[0].Note = 60
+	nodes[1].Note = 62
+	nodes[2].Note = 64
+	nodes[3].Note = 65
+	nodes[4].Note = 67
+	nodes[5].Note = 69
+	nodes[6].Note = 71
+	nodes[7].Note = 72
 	generation := 0
-	for {
+	for generation < 50000 {
 		for n := range nodes {
 			if rnd := rand.Float64() * SpikeFactor; rnd < nodes[n].Spike {
 				m, max := 0, 0.0
@@ -82,6 +104,11 @@ func main() {
 				a := rand.Intn(Chunks)
 				nodes[n].State[a], nodes[m].State[a] = nodes[m].State[a], nodes[n].State[a]
 				fmt.Printf("fire %d: %d %f\n", n, generation, nodes[n].Spike)
+
+				wr.SetDelta(ticks.Ticks8th())
+				wr.NoteOn(nodes[n].Note, 50)
+				wr.SetDelta(ticks.Ticks8th())
+				wr.NoteOff(nodes[n].Note)
 			}
 		}
 		for n := range nodes {
