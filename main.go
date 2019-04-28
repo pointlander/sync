@@ -39,10 +39,10 @@ type CA struct {
 	Note                   uint8
 }
 
-func NewCA(rule uint8, size int) CA {
+func NewCA(rule uint8, size int, rnd *rand.Rand) CA {
 	state := make([]uint64, size)
 	for j := range state {
-		state[j] = rand.Uint64()
+		state[j] = rnd.Uint64()
 	}
 	return CA{
 		Rule:        rule,
@@ -50,6 +50,37 @@ func NewCA(rule uint8, size int) CA {
 		Connections: make([]int, 0, 8),
 		Low:         CASize / 2,
 	}
+}
+
+type Network struct {
+	Neurons []CA
+	Rnd     *rand.Rand
+	Next    []uint64
+}
+
+func NewNetwork(seed, size int) Network {
+	rnd, neurons := rand.New(rand.NewSource(1)), make([]CA, size)
+	for i := range neurons {
+		neurons[i] = NewCA(110, Chunks, rnd)
+	}
+	return Network{
+		Neurons: neurons,
+		Rnd:     rnd,
+		Next:    make([]uint64, Chunks),
+	}
+}
+
+func (network *Network) Step() {
+	neurons, next := network.Neurons, network.Next
+	for n := range neurons {
+		next = neurons[n].Step(next)
+	}
+	network.Next = next
+}
+
+func (network *Network) Swap(m, n int) {
+	a, neurons := network.Rnd.Intn(Chunks), network.Neurons
+	neurons[n].State[a], neurons[m].State[a] = neurons[m].State[a], neurons[n].State[a]
 }
 
 var options = struct {
@@ -76,59 +107,51 @@ func main() {
 	wr.TrackSequenceName("music")
 	defer wr.EndOfTrack()
 
-	rand.Seed(1)
-	nodes, next := make([]CA, 8), make([]uint64, Chunks)
-	for i := range nodes {
-		nodes[i] = NewCA(110, Chunks)
-		nodes[i].AddConnection((i + 7) % 8)
-		nodes[i].AddConnection((i + 1) % 8)
+	network := NewNetwork(1, 8)
+	for i := range network.Neurons {
+		network.Neurons[i].AddConnection((i + 7) % 8)
+		network.Neurons[i].AddConnection((i + 1) % 8)
 	}
-	nodes[0].Note = 60
-	nodes[1].Note = 62
-	nodes[2].Note = 64
-	nodes[3].Note = 65
-	nodes[4].Note = 67
-	nodes[5].Note = 69
-	nodes[6].Note = 71
-	nodes[7].Note = 72
+	network.Neurons[0].Note = 60
+	network.Neurons[1].Note = 62
+	network.Neurons[2].Note = 64
+	network.Neurons[3].Note = 65
+	network.Neurons[4].Note = 67
+	network.Neurons[5].Note = 69
+	network.Neurons[6].Note = 71
+	network.Neurons[7].Note = 72
 	generation := 0
 	for generation < 50000 {
-		for n := range nodes {
-			if rnd := rand.Float64() * SpikeFactor; rnd < nodes[n].Spike {
+		for n := range network.Neurons {
+			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike {
 				m, max := 0, 0.0
-				for _, c := range nodes[n].Connections {
-					if complexity := nodes[c].Complexity; complexity > max {
+				for _, c := range network.Neurons[n].Connections {
+					if complexity := network.Neurons[c].Complexity; complexity > max {
 						m, max = c, complexity
 					}
 				}
-				a := rand.Intn(Chunks)
-				nodes[n].State[a], nodes[m].State[a] = nodes[m].State[a], nodes[n].State[a]
-				fmt.Printf("fire %d: %d %f\n", n, generation, nodes[n].Spike)
+				network.Swap(n, m)
+				fmt.Printf("fire %d: %d %f\n", n, generation, network.Neurons[n].Spike)
 
 				wr.SetDelta(ticks.Ticks8th())
-				wr.NoteOn(nodes[n].Note, 50)
+				wr.NoteOn(network.Neurons[n].Note, 50)
 				wr.SetDelta(ticks.Ticks8th())
-				wr.NoteOff(nodes[n].Note)
+				wr.NoteOff(network.Neurons[n].Note)
 			}
 		}
-		for n := range nodes {
-			next = nodes[n].Step(next)
-		}
+		network.Step()
 		generation++
 	}
 }
 
 func bench() {
-	rand.Seed(1)
-	iterations, nodes := 12000, make([]CA, 2)
-	for i := range nodes {
-		nodes[i] = NewCA(110, Chunks)
-	}
+	network := NewNetwork(1, 2)
+	iterations := 12000
 	points := make(plotter.XYs, 0, iterations)
-	gray, count, next := image.NewGray(image.Rect(0, 0, 2*CASize+3, iterations)), 0, make([]uint64, Chunks)
+	gray, count := image.NewGray(image.Rect(0, 0, 2*CASize+3, iterations)), 0
 	for i := 0; i < iterations; i++ {
-		for n := range nodes {
-			for _, s := range nodes[n].State {
+		for n := range network.Neurons {
+			for _, s := range network.Neurons[n].State {
 				for j := 0; j < ChunkSize; j++ {
 					if s&0x1 == 0 {
 						gray.Pix[count] = 0
@@ -148,19 +171,15 @@ func bench() {
 				count++
 			}
 		}
-		if rnd := rand.Float64() * SpikeFactor; rnd < nodes[0].Spike {
-			a := rand.Intn(Chunks)
-			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire 0: %d %f\n", i, nodes[0].Spike)
-		} else if rnd < nodes[1].Spike {
-			a := rand.Intn(Chunks)
-			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire 1: %d %f\n", i, nodes[1].Spike)
+		if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[0].Spike {
+			network.Swap(0, 1)
+			fmt.Printf("fire 0: %d %f\n", i, network.Neurons[0].Spike)
+		} else if r < network.Neurons[1].Spike {
+			network.Swap(0, 1)
+			fmt.Printf("fire 1: %d %f\n", i, network.Neurons[1].Spike)
 		}
-		for n := range nodes {
-			next = nodes[n].Step(next)
-		}
-		points = append(points, plotter.XY{X: float64(i), Y: nodes[0].Spike})
+		network.Step()
+		points = append(points, plotter.XY{X: float64(i), Y: network.Neurons[0].Spike})
 	}
 
 	out, err := os.Create("ca.png")
