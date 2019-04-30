@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 
+	"github.com/MaxHalford/eaopt"
 	"gitlab.com/gomidi/midi/mid"
 	"gitlab.com/gomidi/midi/smf"
 	"gitlab.com/gomidi/midi/smf/smfwriter"
@@ -28,6 +29,7 @@ const (
 	CASize      = Chunks * ChunkSize
 	Alpha       = 0.08
 	SpikeFactor = 64
+	NetworkSize = 8
 )
 
 type CA struct {
@@ -85,8 +87,10 @@ func (network *Network) Swap(m, n int) {
 
 var options = struct {
 	bench *bool
+	learn *bool
 }{
 	bench: flag.Bool("bench", false, "run the test bench"),
+	learn: flag.Bool("learn", false, "learn a network"),
 }
 
 func main() {
@@ -95,6 +99,28 @@ func main() {
 	if *options.bench {
 		bench()
 		return
+	}
+
+	if *options.learn {
+		ga, err := eaopt.NewDefaultGAConfig().NewGA()
+		if err != nil {
+			panic(err)
+		}
+
+		ga.NGenerations = 100
+		ga.RNG = rand.New(rand.NewSource(1))
+		ga.ParallelEval = true
+		ga.PopSize = 100
+
+		ga.Callback = func(ga *eaopt.GA) {
+			fmt.Printf("Best fitness at generation %d: %f\n", ga.Generations, ga.HallOfFame[0].Fitness)
+			fmt.Println(ga.HallOfFame[0].Genome.(BoolSlice).String())
+		}
+
+		err = ga.Minimize(BoolSliceFactory)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	out, err := os.Create("music.midi")
