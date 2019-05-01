@@ -29,7 +29,7 @@ const (
 	CASize      = Chunks * ChunkSize
 	Alpha       = 0.08
 	SpikeFactor = 64
-	NetworkSize = 8
+	NetworkSize = 10
 )
 
 type CA struct {
@@ -121,6 +121,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+		return
 	}
 
 	out, err := os.Create("music.midi")

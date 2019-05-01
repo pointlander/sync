@@ -74,7 +74,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 }
 
 func (s BoolSlice) Evaluate() (float64, error) {
-	network, k := NewNetwork(1, 8), 0
+	network, k := NewNetwork(1, NetworkSize), 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < i; j++ {
 			if s[k] {
@@ -92,7 +92,6 @@ func (s BoolSlice) Evaluate() (float64, error) {
 	network.Neurons[4].Note = 67
 	network.Neurons[5].Note = 69
 	network.Neurons[6].Note = 71
-	network.Neurons[7].Note = 72
 	generation := 0
 	compressed := Writer{}
 	notes, writer := 0, gzip.NewWriter(&compressed)
@@ -108,10 +107,12 @@ func (s BoolSlice) Evaluate() (float64, error) {
 				}
 				network.Swap(n, m)
 
-				notes++
-				_, err := writer.Write([]byte{network.Neurons[n].Note})
-				if err != nil {
-					panic(err)
+				if note := network.Neurons[n].Note; note > 0 {
+					notes++
+					_, err := writer.Write([]byte{note})
+					if err != nil {
+						panic(err)
+					}
 				}
 			}
 		}
