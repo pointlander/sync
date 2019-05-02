@@ -85,6 +85,26 @@ func (network *Network) Swap(m, n int) {
 	neurons[n].State[a], neurons[m].State[a] = neurons[m].State[a], neurons[n].State[a]
 }
 
+type Histogram [256]uint64
+
+func (h *Histogram) Entropy() float64 {
+	sum := uint64(0)
+	for _, v := range h {
+		sum += v
+	}
+	entropy, total := 0.0, float64(sum)
+	for _, v := range h {
+		if v == 0 {
+			continue
+		}
+		p := float64(v) / total
+		entropy += p * math.Log2(p)
+	}
+	return -entropy
+}
+
+type Markov [256][256]uint64
+
 var options = struct {
 	bench *bool
 	learn *bool
@@ -146,9 +166,10 @@ func main() {
 	network.Neurons[4].Note = 67
 	network.Neurons[5].Note = 69
 	network.Neurons[6].Note = 71
-	network.Neurons[7].Note = 72
 	generation := 0
-	for generation < 50000 {
+	notes := make([]uint8, 0, 256)
+	markov, last := Markov{}, uint8(0)
+	for generation < 100000 {
 		for n := range network.Neurons {
 			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike {
 				m, max := 0, 0.0
@@ -160,14 +181,42 @@ func main() {
 				network.Swap(n, m)
 				fmt.Printf("fire %d: %d %f\n", n, generation, network.Neurons[n].Spike)
 
-				wr.SetDelta(ticks.Ticks8th())
-				wr.NoteOn(network.Neurons[n].Note, 50)
-				wr.SetDelta(ticks.Ticks8th())
-				wr.NoteOff(network.Neurons[n].Note)
+				if note := network.Neurons[n].Note; note > 0 {
+					wr.SetDelta(ticks.Ticks8th())
+					wr.NoteOn(note, 50)
+					wr.SetDelta(ticks.Ticks8th())
+					wr.NoteOff(note)
+					notes = append(notes, note)
+					markov[last][note]++
+					last = note
+				}
 			}
 		}
 		network.Step()
 		generation++
+	}
+
+	length := len(notes)
+	for i := 0; i < length-63; i++ {
+		histogram := Histogram{}
+		for j := 0; j < 64; j++ {
+			histogram[notes[i+j]]++
+		}
+		fmt.Println(histogram.Entropy())
+	}
+
+	for i := range markov {
+		isZero := true
+		for _, v := range markov[i] {
+			if v != 0 {
+				isZero = false
+				break
+			}
+		}
+		if isZero {
+			continue
+		}
+		fmt.Printf("%d %v\n", i, markov[i])
 	}
 }
 
