@@ -103,7 +103,40 @@ func (h *Histogram) Entropy() float64 {
 	return -entropy
 }
 
-type Markov [256][256]uint64
+type Markov struct {
+	Model    [256][256]uint64
+	State    uint8
+	HasState bool
+}
+
+func (m *Markov) Add(symbol uint8) {
+	if !m.HasState {
+		m.State, m.HasState = symbol, true
+		return
+	}
+	m.Model[m.State][symbol]++
+	m.State = symbol
+}
+
+func (m *Markov) Entropy() float64 {
+	sum, model := uint64(0), &m.Model
+	for i := range model {
+		for _, v := range model[i] {
+			sum += v
+		}
+	}
+	entropy, total := 0.0, float64(sum)
+	for i := range model {
+		for _, v := range model[i] {
+			if v == 0 {
+				continue
+			}
+			p := float64(v) / total
+			entropy += p * math.Log2(p)
+		}
+	}
+	return -entropy
+}
 
 var options = struct {
 	bench *bool
@@ -111,6 +144,16 @@ var options = struct {
 }{
 	bench: flag.Bool("bench", false, "run the test bench"),
 	learn: flag.Bool("learn", false, "learn a network"),
+}
+
+var Notes = [...]uint8{
+	60,
+	62,
+	64,
+	65,
+	67,
+	69,
+	71,
 }
 
 func main() {
@@ -159,17 +202,12 @@ func main() {
 		network.Neurons[i].AddConnection((i + 7) % 8)
 		network.Neurons[i].AddConnection((i + 1) % 8)
 	}
-	network.Neurons[0].Note = 60
-	network.Neurons[1].Note = 62
-	network.Neurons[2].Note = 64
-	network.Neurons[3].Note = 65
-	network.Neurons[4].Note = 67
-	network.Neurons[5].Note = 69
-	network.Neurons[6].Note = 71
+	for i, note := range Notes {
+		network.Neurons[i].Note = note
+	}
 	generation := 0
 	notes := make([]uint8, 0, 256)
-	markov, last := Markov{}, uint8(0)
-	for generation < 100000 {
+	for generation < 300000 {
 		for n := range network.Neurons {
 			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike {
 				m, max := 0, 0.0
@@ -187,8 +225,6 @@ func main() {
 					wr.SetDelta(ticks.Ticks8th())
 					wr.NoteOff(note)
 					notes = append(notes, note)
-					markov[last][note]++
-					last = note
 				}
 			}
 		}
@@ -196,28 +232,72 @@ func main() {
 		generation++
 	}
 
+	entropyPoints, markovPoints := make(plotter.XYs, 0, 128), make(plotter.XYs, 0, 128)
 	length := len(notes)
 	for i := 0; i < length-63; i++ {
-		histogram := Histogram{}
+		histogram, markov := Histogram{}, Markov{}
 		for j := 0; j < 64; j++ {
-			histogram[notes[i+j]]++
+			note := notes[i+j]
+			histogram[note]++
+			markov.Add(note)
 		}
-		fmt.Println(histogram.Entropy())
+		e, m := histogram.Entropy(), markov.Entropy()
+		entropyPoints = append(entropyPoints, plotter.XY{X: float64(i), Y: e})
+		markovPoints = append(markovPoints, plotter.XY{X: float64(i), Y: m})
+		fmt.Println(e, m)
 	}
 
-	for i := range markov {
-		isZero := true
-		for _, v := range markov[i] {
-			if v != 0 {
-				isZero = false
-				break
-			}
-		}
-		if isZero {
-			continue
-		}
-		fmt.Printf("%d %v\n", i, markov[i])
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
 	}
+
+	p.Title.Text = "entropy"
+	p.X.Label.Text = "time"
+	p.Y.Label.Text = "entrpy"
+
+	scatter, err := plotter.NewScatter(entropyPoints)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "entropy.png")
+	if err != nil {
+		panic(err)
+	}
+
+	p, err = plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "markov"
+	p.X.Label.Text = "time"
+	p.Y.Label.Text = "markov"
+
+	scatter, err = plotter.NewScatter(markovPoints)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "markov.png")
+	if err != nil {
+		panic(err)
+	}
+
+	max := Markov{}
+	for _, i := range Notes {
+		for _, j := range Notes {
+			max.Model[i][j] = 1
+		}
+	}
+	fmt.Println("max", max.Entropy())
 }
 
 func bench() {

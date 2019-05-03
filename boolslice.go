@@ -93,7 +93,7 @@ func (s BoolSlice) Evaluate() (float64, error) {
 	network.Neurons[5].Note = 69
 	network.Neurons[6].Note = 71
 	generation := 0
-	compressed := Writer{}
+	compressed, markov := Writer{}, Markov{}
 	notes, writer := 0, gzip.NewWriter(&compressed)
 	for generation < 20000 {
 		for n := range network.Neurons {
@@ -113,6 +113,7 @@ func (s BoolSlice) Evaluate() (float64, error) {
 					if err != nil {
 						panic(err)
 					}
+					markov.Add(note)
 				}
 			}
 		}
@@ -125,8 +126,10 @@ func (s BoolSlice) Evaluate() (float64, error) {
 		panic(err)
 	}
 
-	fitness := float64(compressed.Count) / float64(notes)
+	//fitness := float64(compressed.Count) / float64(notes)
 	//fmt.Println(fitness)
+	fitness := markov.Entropy()
+	fmt.Println(fitness)
 	return fitness, nil
 }
 
