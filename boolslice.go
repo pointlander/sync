@@ -62,8 +62,8 @@ func (s BoolSlice) String() string {
 	return series
 }
 
-func (s BoolSlice) Evaluate() (float64, error) {
-	network, k := NewNetwork(1, NetworkSize), 0
+func (s BoolSlice) fitness(seed int) float64 {
+	network, k := NewNetwork(seed, NetworkSize), 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < i; j++ {
 			if s[k] {
@@ -98,8 +98,12 @@ func (s BoolSlice) Evaluate() (float64, error) {
 		network.Step()
 	}
 
-	fitness := markov.Entropy() / MaxMarkov
-	fmt.Println(fitness)
+	return markov.Entropy() / MaxMarkov
+}
+
+func (s BoolSlice) Evaluate() (float64, error) {
+	fitness := (s.fitness(1) + s.fitness(2)) / 2
+	//fmt.Println(fitness)
 	return fitness, nil
 }
 
