@@ -232,8 +232,9 @@ func main() {
 		generation++
 	}
 
-	entropyPoints, markovPoints := make(plotter.XYs, 0, 128), make(plotter.XYs, 0, 128)
-	length := len(notes)
+	maxEntropy := math.Log2(float64(len(Notes)))
+	length, maxMarkov := len(notes), 2*maxEntropy
+	entropyPoints, markovPoints := make(plotter.XYs, 0, length), make(plotter.XYs, 0, length)
 	for i := 0; i < length-63; i++ {
 		histogram, markov := Histogram{}, Markov{}
 		for j := 0; j < 64; j++ {
@@ -241,10 +242,9 @@ func main() {
 			histogram[note]++
 			markov.Add(note)
 		}
-		e, m := histogram.Entropy(), markov.Entropy()
+		e, m := histogram.Entropy()/maxEntropy, markov.Entropy()/maxMarkov
 		entropyPoints = append(entropyPoints, plotter.XY{X: float64(i), Y: e})
 		markovPoints = append(markovPoints, plotter.XY{X: float64(i), Y: m})
-		fmt.Println(e, m)
 	}
 
 	p, err := plot.New()
@@ -290,14 +290,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	max := Markov{}
-	for _, i := range Notes {
-		for _, j := range Notes {
-			max.Model[i][j] = 1
-		}
-	}
-	fmt.Println("max", max.Entropy())
 }
 
 func bench() {
