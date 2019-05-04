@@ -5,7 +5,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"fmt"
 	"math/rand"
 
@@ -63,16 +62,6 @@ func (s BoolSlice) String() string {
 	return series
 }
 
-type Writer struct {
-	Count int
-}
-
-func (w *Writer) Write(p []byte) (n int, err error) {
-	length := len(p)
-	w.Count += length
-	return length, nil
-}
-
 func (s BoolSlice) Evaluate() (float64, error) {
 	network, k := NewNetwork(1, NetworkSize), 0
 	for i := 0; i < NetworkSize; i++ {
@@ -84,18 +73,12 @@ func (s BoolSlice) Evaluate() (float64, error) {
 			k++
 		}
 	}
+	for i, note := range Notes {
+		network.Neurons[i].Note = note
+	}
 
-	network.Neurons[0].Note = 60
-	network.Neurons[1].Note = 62
-	network.Neurons[2].Note = 64
-	network.Neurons[3].Note = 65
-	network.Neurons[4].Note = 67
-	network.Neurons[5].Note = 69
-	network.Neurons[6].Note = 71
-	generation := 0
-	compressed, markov := Writer{}, Markov{}
-	notes, writer := 0, gzip.NewWriter(&compressed)
-	for generation < 20000 {
+	markov := Markov{}
+	for generation := 0; generation < 20000; generation++ {
 		for n := range network.Neurons {
 			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike &&
 				len(network.Neurons[n].Connections) > 0 {
@@ -108,27 +91,14 @@ func (s BoolSlice) Evaluate() (float64, error) {
 				network.Swap(n, m)
 
 				if note := network.Neurons[n].Note; note > 0 {
-					notes++
-					_, err := writer.Write([]byte{note})
-					if err != nil {
-						panic(err)
-					}
 					markov.Add(note)
 				}
 			}
 		}
 		network.Step()
-		generation++
 	}
 
-	err := writer.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	//fitness := float64(compressed.Count) / float64(notes)
-	//fmt.Println(fitness)
-	fitness := markov.Entropy()
+	fitness := markov.Entropy() / MaxMarkov
 	fmt.Println(fitness)
 	return fitness, nil
 }

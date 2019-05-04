@@ -146,15 +146,19 @@ var options = struct {
 	learn: flag.Bool("learn", false, "learn a network"),
 }
 
-var Notes = [...]uint8{
-	60,
-	62,
-	64,
-	65,
-	67,
-	69,
-	71,
-}
+var (
+	Notes = [...]uint8{
+		60,
+		62,
+		64,
+		65,
+		67,
+		69,
+		71,
+	}
+	MaxEntropy = math.Log2(float64(len(Notes)))
+	MaxMarkov  = 2 * MaxEntropy
+)
 
 func main() {
 	flag.Parse()
@@ -232,8 +236,7 @@ func main() {
 		generation++
 	}
 
-	maxEntropy := math.Log2(float64(len(Notes)))
-	length, maxMarkov := len(notes), 2*maxEntropy
+	length := len(notes)
 	entropyPoints, markovPoints := make(plotter.XYs, 0, length), make(plotter.XYs, 0, length)
 	for i := 0; i < length-63; i++ {
 		histogram, markov := Histogram{}, Markov{}
@@ -242,7 +245,7 @@ func main() {
 			histogram[note]++
 			markov.Add(note)
 		}
-		e, m := histogram.Entropy()/maxEntropy, markov.Entropy()/maxMarkov
+		e, m := histogram.Entropy()/MaxEntropy, markov.Entropy()/MaxMarkov
 		entropyPoints = append(entropyPoints, plotter.XY{X: float64(i), Y: e})
 		markovPoints = append(markovPoints, plotter.XY{X: float64(i), Y: m})
 	}
