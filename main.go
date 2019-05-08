@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"image"
@@ -141,9 +142,11 @@ func (m *Markov) Entropy() float64 {
 var options = struct {
 	bench *bool
 	learn *bool
+	net   *string
 }{
 	bench: flag.Bool("bench", false, "run the test bench"),
 	learn: flag.Bool("learn", false, "learn a network"),
+	net:   flag.String("net", "", "net file to load"),
 }
 
 var (
@@ -174,7 +177,7 @@ func main() {
 			panic(err)
 		}
 
-		ga.NGenerations = 100
+		ga.NGenerations = 25
 		ga.RNG = rand.New(rand.NewSource(1))
 		ga.ParallelEval = true
 		ga.PopSize = 100
@@ -188,6 +191,19 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
+		best := ga.HallOfFame[0].Genome.(BoolSlice)
+		out, err := os.Create("best.net")
+		if err != nil {
+			panic(err)
+		}
+		defer out.Close()
+		encoder := gob.NewEncoder(out)
+		err = encoder.Encode(best)
+		if err != nil {
+			panic(err)
+		}
+
 		return
 	}
 
@@ -201,10 +217,37 @@ func main() {
 	wr.TrackSequenceName("music")
 	defer wr.EndOfTrack()
 
-	network := NewNetwork(1, 8)
-	for i := range network.Neurons {
-		network.Neurons[i].AddConnection((i + 7) % 8)
-		network.Neurons[i].AddConnection((i + 1) % 8)
+	var network Network
+	if *options.net != "" {
+		network = NewNetwork(1, NetworkSize)
+		net := BoolSlice{}
+		in, err := os.Open(*options.net)
+		if err != nil {
+			panic(err)
+		}
+		defer in.Close()
+		decoder := gob.NewDecoder(in)
+		err = decoder.Decode(&net)
+		if err != nil {
+			panic(err)
+		}
+
+		k := 0
+		for i := 0; i < NetworkSize; i++ {
+			for j := 0; j < i; j++ {
+				if net[k] {
+					network.Neurons[i].AddConnection(j)
+					network.Neurons[j].AddConnection(i)
+				}
+				k++
+			}
+		}
+	} else {
+		network = NewNetwork(1, 8)
+		for i := range network.Neurons {
+			network.Neurons[i].AddConnection((i + 7) % 8)
+			network.Neurons[i].AddConnection((i + 1) % 8)
+		}
 	}
 	for i, note := range Notes {
 		network.Neurons[i].Note = note
@@ -213,7 +256,8 @@ func main() {
 	notes := make([]uint8, 0, 256)
 	for generation < 300000 {
 		for n := range network.Neurons {
-			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike {
+			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike &&
+				len(network.Neurons[n].Connections) > 0 {
 				m, max := 0, 0.0
 				for _, c := range network.Neurons[n].Connections {
 					if complexity := network.Neurons[c].Complexity; complexity > max {
