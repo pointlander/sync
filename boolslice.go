@@ -65,10 +65,9 @@ func (s BoolSlice) String() string {
 func (s BoolSlice) fitness(seed int) float64 {
 	network, k := NewNetwork(seed, NetworkSize), 0
 	for i := 0; i < NetworkSize; i++ {
-		for j := 0; j < i; j++ {
+		for j := 0; j < NetworkSize; j++ {
 			if s[k] {
 				network.Neurons[i].AddConnection(j)
-				network.Neurons[j].AddConnection(i)
 			}
 			k++
 		}
@@ -78,11 +77,10 @@ func (s BoolSlice) fitness(seed int) float64 {
 	}
 
 	markov := Markov{}
-	for generation := 0; generation < 20000; generation++ {
+	for generation := 0; generation < 40000; generation++ {
 		for n := range network.Neurons {
-			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike &&
-				len(network.Neurons[n].Connections) > 0 {
-				m, max := 0, 0.0
+			if network.Neurons[n].Spike > SpikeThreshold {
+				m, max := n, 0.0
 				for _, c := range network.Neurons[n].Connections {
 					if complexity := network.Neurons[c].Complexity; complexity > max {
 						m, max = c, complexity
@@ -102,9 +100,9 @@ func (s BoolSlice) fitness(seed int) float64 {
 }
 
 func (s BoolSlice) Evaluate() (float64, error) {
-	fitness := (s.fitness(1) + s.fitness(2)) / 2
+	fitness := (s.fitness(1)+s.fitness(2))/2 - .5
 	//fmt.Println(fitness)
-	return fitness, nil
+	return fitness * fitness, nil
 }
 
 func (s BoolSlice) Mutate(rng *rand.Rand) {
@@ -122,10 +120,10 @@ func (s BoolSlice) Clone() eaopt.Genome {
 }
 
 func BoolSliceFactory(rnd *rand.Rand) eaopt.Genome {
-	s := make(BoolSlice, NetworkSize*(NetworkSize-1)/2)
+	s := make(BoolSlice, NetworkSize*NetworkSize)
 	k := 0
 	for i := 0; i < NetworkSize; i++ {
-		for j := 0; j < i; j++ {
+		for j := 0; j < NetworkSize; j++ {
 			s[k] = rnd.Intn(2) == 0
 			k++
 		}

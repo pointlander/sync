@@ -25,12 +25,13 @@ import (
 )
 
 const (
-	Chunks      = 8
-	ChunkSize   = 64
-	CASize      = Chunks * ChunkSize
-	Alpha       = 0.08
-	SpikeFactor = 64
-	NetworkSize = 10
+	Chunks         = 8
+	ChunkSize      = 64
+	CASize         = Chunks * ChunkSize
+	Alpha          = 0.08
+	SpikeFactor    = 64
+	SpikeThreshold = .33
+	NetworkSize    = 7
 )
 
 type CA struct {
@@ -83,7 +84,11 @@ func (network *Network) Step() {
 
 func (network *Network) Swap(m, n int) {
 	a, neurons := network.Rnd.Intn(Chunks), network.Neurons
-	neurons[n].State[a], neurons[m].State[a] = neurons[m].State[a], neurons[n].State[a]
+	b := a
+	for m == n && b == a {
+		b = network.Rnd.Intn(Chunks)
+	}
+	neurons[n].State[a], neurons[m].State[b] = neurons[m].State[b], neurons[n].State[a]
 }
 
 type Histogram [256]uint64
@@ -217,9 +222,8 @@ func main() {
 	wr.TrackSequenceName("music")
 	defer wr.EndOfTrack()
 
-	var network Network
+	network := NewNetwork(1, NetworkSize)
 	if *options.net != "" {
-		network = NewNetwork(1, NetworkSize)
 		net := BoolSlice{}
 		in, err := os.Open(*options.net)
 		if err != nil {
@@ -234,31 +238,29 @@ func main() {
 
 		k := 0
 		for i := 0; i < NetworkSize; i++ {
-			for j := 0; j < i; j++ {
+			for j := 0; j < NetworkSize; j++ {
 				if net[k] {
 					network.Neurons[i].AddConnection(j)
-					network.Neurons[j].AddConnection(i)
 				}
 				k++
 			}
 		}
 	} else {
-		network = NewNetwork(1, 8)
 		for i := range network.Neurons {
-			network.Neurons[i].AddConnection((i + 7) % 8)
-			network.Neurons[i].AddConnection((i + 1) % 8)
+			network.Neurons[i].AddConnection((i + (NetworkSize - 1)) % NetworkSize)
+			network.Neurons[i].AddConnection((i + 1) % NetworkSize)
 		}
 	}
 	for i, note := range Notes {
 		network.Neurons[i].Note = note
 	}
+
 	generation := 0
 	notes := make([]uint8, 0, 256)
 	for generation < 300000 {
 		for n := range network.Neurons {
-			if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[n].Spike &&
-				len(network.Neurons[n].Connections) > 0 {
-				m, max := 0, 0.0
+			if network.Neurons[n].Spike > SpikeThreshold {
+				m, max := n, 0.0
 				for _, c := range network.Neurons[n].Connections {
 					if complexity := network.Neurons[c].Complexity; complexity > max {
 						m, max = c, complexity
@@ -366,10 +368,10 @@ func bench() {
 				count++
 			}
 		}
-		if r := network.Rnd.Float64() * SpikeFactor; r < network.Neurons[0].Spike {
+		if network.Neurons[0].Spike > SpikeThreshold {
 			network.Swap(0, 1)
 			fmt.Printf("fire 0: %d %f\n", i, network.Neurons[0].Spike)
-		} else if r < network.Neurons[1].Spike {
+		} else if network.Neurons[1].Spike > SpikeThreshold {
 			network.Swap(0, 1)
 			fmt.Printf("fire 1: %d %f\n", i, network.Neurons[1].Spike)
 		}
