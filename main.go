@@ -239,7 +239,7 @@ func main() {
 		k := 0
 		for i := 0; i < NetworkSize; i++ {
 			for j := 0; j < NetworkSize; j++ {
-				if net[k] {
+				if i != j && net[k] {
 					network.Neurons[i].AddConnection(j)
 				}
 				k++

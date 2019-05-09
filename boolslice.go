@@ -66,7 +66,7 @@ func (s BoolSlice) fitness(seed int) float64 {
 	network, k := NewNetwork(seed, NetworkSize), 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < NetworkSize; j++ {
-			if s[k] {
+			if i != j && s[k] {
 				network.Neurons[i].AddConnection(j)
 			}
 			k++
