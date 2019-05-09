@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"image"
@@ -13,6 +14,10 @@ import (
 	"math/rand"
 	"os"
 
+	"github.com/MaxHalford/eaopt"
+	"gitlab.com/gomidi/midi/mid"
+	"gitlab.com/gomidi/midi/smf"
+	"gitlab.com/gomidi/midi/smf/smfwriter"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -20,11 +25,13 @@ import (
 )
 
 const (
-	Chunks      = 8
-	ChunkSize   = 64
-	CASize      = Chunks * ChunkSize
-	Alpha       = 0.08
-	SpikeFactor = 64
+	Chunks         = 8
+	ChunkSize      = 64
+	CASize         = Chunks * ChunkSize
+	Alpha          = 0.08
+	SpikeFactor    = 64
+	SpikeThreshold = .33
+	NetworkSize    = 7
 )
 
 type CA struct {
@@ -33,12 +40,13 @@ type CA struct {
 	Connections            []int
 	On                     uint64
 	Low, Complexity, Spike float64
+	Note                   uint8
 }
 
-func NewCA(rule uint8, size int) CA {
+func NewCA(rule uint8, size int, rnd *rand.Rand) CA {
 	state := make([]uint64, size)
 	for j := range state {
-		state[j] = rand.Uint64()
+		state[j] = rnd.Uint64()
 	}
 	return CA{
 		Rule:        rule,
@@ -48,11 +56,117 @@ func NewCA(rule uint8, size int) CA {
 	}
 }
 
+type Network struct {
+	Neurons []CA
+	Rnd     *rand.Rand
+	Next    []uint64
+}
+
+func NewNetwork(seed, size int) Network {
+	rnd, neurons := rand.New(rand.NewSource(1)), make([]CA, size)
+	for i := range neurons {
+		neurons[i] = NewCA(110, Chunks, rnd)
+	}
+	return Network{
+		Neurons: neurons,
+		Rnd:     rnd,
+		Next:    make([]uint64, Chunks),
+	}
+}
+
+func (network *Network) Step() {
+	neurons, next := network.Neurons, network.Next
+	for n := range neurons {
+		next = neurons[n].Step(next)
+	}
+	network.Next = next
+}
+
+func (network *Network) Swap(m, n int) {
+	a, neurons := network.Rnd.Intn(Chunks), network.Neurons
+	b := a
+	for m == n && b == a {
+		b = network.Rnd.Intn(Chunks)
+	}
+	neurons[n].State[a], neurons[m].State[b] = neurons[m].State[b], neurons[n].State[a]
+}
+
+type Histogram [256]uint64
+
+func (h *Histogram) Entropy() float64 {
+	sum := uint64(0)
+	for _, v := range h {
+		sum += v
+	}
+	entropy, total := 0.0, float64(sum)
+	for _, v := range h {
+		if v == 0 {
+			continue
+		}
+		p := float64(v) / total
+		entropy += p * math.Log2(p)
+	}
+	return -entropy
+}
+
+type Markov struct {
+	Model    [256][256]uint64
+	State    uint8
+	HasState bool
+}
+
+func (m *Markov) Add(symbol uint8) {
+	if !m.HasState {
+		m.State, m.HasState = symbol, true
+		return
+	}
+	m.Model[m.State][symbol]++
+	m.State = symbol
+}
+
+func (m *Markov) Entropy() float64 {
+	sum, model := uint64(0), &m.Model
+	for i := range model {
+		for _, v := range model[i] {
+			sum += v
+		}
+	}
+	entropy, total := 0.0, float64(sum)
+	for i := range model {
+		for _, v := range model[i] {
+			if v == 0 {
+				continue
+			}
+			p := float64(v) / total
+			entropy += p * math.Log2(p)
+		}
+	}
+	return -entropy
+}
+
 var options = struct {
 	bench *bool
+	learn *bool
+	net   *string
 }{
 	bench: flag.Bool("bench", false, "run the test bench"),
+	learn: flag.Bool("learn", false, "learn a network"),
+	net:   flag.String("net", "", "net file to load"),
 }
+
+var (
+	Notes = [...]uint8{
+		60,
+		62,
+		64,
+		65,
+		67,
+		69,
+		71,
+	}
+	MaxEntropy = math.Log2(float64(len(Notes)))
+	MaxMarkov  = 2 * MaxEntropy
+)
 
 func main() {
 	flag.Parse()
@@ -62,46 +176,179 @@ func main() {
 		return
 	}
 
-	rand.Seed(1)
-	nodes, next := make([]CA, 8), make([]uint64, Chunks)
-	for i := range nodes {
-		nodes[i] = NewCA(110, Chunks)
-		nodes[i].AddConnection((i + 7) % 8)
-		nodes[i].AddConnection((i + 1) % 8)
+	if *options.learn {
+		ga, err := eaopt.NewDefaultGAConfig().NewGA()
+		if err != nil {
+			panic(err)
+		}
+
+		ga.NGenerations = 25
+		ga.RNG = rand.New(rand.NewSource(1))
+		ga.ParallelEval = true
+		ga.PopSize = 100
+
+		ga.Callback = func(ga *eaopt.GA) {
+			fmt.Printf("Best fitness at generation %d: %f\n", ga.Generations, ga.HallOfFame[0].Fitness)
+			fmt.Println(ga.HallOfFame[0].Genome.(BoolSlice).String())
+		}
+
+		err = ga.Minimize(BoolSliceFactory)
+		if err != nil {
+			panic(err)
+		}
+
+		best := ga.HallOfFame[0].Genome.(BoolSlice)
+		out, err := os.Create("best.net")
+		if err != nil {
+			panic(err)
+		}
+		defer out.Close()
+		encoder := gob.NewEncoder(out)
+		err = encoder.Encode(best)
+		if err != nil {
+			panic(err)
+		}
+
+		return
 	}
+
+	out, err := os.Create("music.midi")
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	ticks := smf.MetricTicks(1920)
+	wr := mid.NewSMF(out, 1, smfwriter.TimeFormat(ticks))
+	wr.TrackSequenceName("music")
+	defer wr.EndOfTrack()
+
+	network := NewNetwork(1, NetworkSize)
+	if *options.net != "" {
+		net := BoolSlice{}
+		in, err := os.Open(*options.net)
+		if err != nil {
+			panic(err)
+		}
+		defer in.Close()
+		decoder := gob.NewDecoder(in)
+		err = decoder.Decode(&net)
+		if err != nil {
+			panic(err)
+		}
+
+		k := 0
+		for i := 0; i < NetworkSize; i++ {
+			for j := 0; j < NetworkSize; j++ {
+				if net[k] {
+					network.Neurons[i].AddConnection(j)
+				}
+				k++
+			}
+		}
+	} else {
+		for i := range network.Neurons {
+			network.Neurons[i].AddConnection((i + (NetworkSize - 1)) % NetworkSize)
+			network.Neurons[i].AddConnection((i + 1) % NetworkSize)
+		}
+	}
+	for i, note := range Notes {
+		network.Neurons[i].Note = note
+	}
+
 	generation := 0
-	for {
-		for n := range nodes {
-			if rnd := rand.Float64() * SpikeFactor; rnd < nodes[n].Spike {
-				m, max := 0, 0.0
-				for _, c := range nodes[n].Connections {
-					if complexity := nodes[c].Complexity; complexity > max {
+	notes := make([]uint8, 0, 256)
+	for generation < 300000 {
+		for n := range network.Neurons {
+			if network.Neurons[n].Spike > SpikeThreshold {
+				m, max := n, 0.0
+				for _, c := range network.Neurons[n].Connections {
+					if complexity := network.Neurons[c].Complexity; complexity > max {
 						m, max = c, complexity
 					}
 				}
-				a := rand.Intn(Chunks)
-				nodes[n].State[a], nodes[m].State[a] = nodes[m].State[a], nodes[n].State[a]
-				fmt.Printf("fire %d: %d %f\n", n, generation, nodes[n].Spike)
+				network.Swap(n, m)
+				fmt.Printf("fire %d: %d %f\n", n, generation, network.Neurons[n].Spike)
+
+				if note := network.Neurons[n].Note; note > 0 {
+					wr.SetDelta(ticks.Ticks8th())
+					wr.NoteOn(note, 50)
+					wr.SetDelta(ticks.Ticks8th())
+					wr.NoteOff(note)
+					notes = append(notes, note)
+				}
 			}
 		}
-		for n := range nodes {
-			next = nodes[n].Step(next)
-		}
+		network.Step()
 		generation++
+	}
+
+	length := len(notes)
+	entropyPoints, markovPoints := make(plotter.XYs, 0, length), make(plotter.XYs, 0, length)
+	for i := 0; i < length-63; i++ {
+		histogram, markov := Histogram{}, Markov{}
+		for j := 0; j < 64; j++ {
+			note := notes[i+j]
+			histogram[note]++
+			markov.Add(note)
+		}
+		e, m := histogram.Entropy()/MaxEntropy, markov.Entropy()/MaxMarkov
+		entropyPoints = append(entropyPoints, plotter.XY{X: float64(i), Y: e})
+		markovPoints = append(markovPoints, plotter.XY{X: float64(i), Y: m})
+	}
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "entropy"
+	p.X.Label.Text = "time"
+	p.Y.Label.Text = "entrpy"
+
+	scatter, err := plotter.NewScatter(entropyPoints)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "entropy.png")
+	if err != nil {
+		panic(err)
+	}
+
+	p, err = plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "markov"
+	p.X.Label.Text = "time"
+	p.Y.Label.Text = "markov"
+
+	scatter, err = plotter.NewScatter(markovPoints)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "markov.png")
+	if err != nil {
+		panic(err)
 	}
 }
 
 func bench() {
-	rand.Seed(1)
-	iterations, nodes := 12000, make([]CA, 2)
-	for i := range nodes {
-		nodes[i] = NewCA(110, Chunks)
-	}
+	network := NewNetwork(1, 2)
+	iterations := 12000
 	points := make(plotter.XYs, 0, iterations)
-	gray, count, next := image.NewGray(image.Rect(0, 0, 2*CASize+3, iterations)), 0, make([]uint64, Chunks)
+	gray, count := image.NewGray(image.Rect(0, 0, 2*CASize+3, iterations)), 0
 	for i := 0; i < iterations; i++ {
-		for n := range nodes {
-			for _, s := range nodes[n].State {
+		for n := range network.Neurons {
+			for _, s := range network.Neurons[n].State {
 				for j := 0; j < ChunkSize; j++ {
 					if s&0x1 == 0 {
 						gray.Pix[count] = 0
@@ -121,19 +368,15 @@ func bench() {
 				count++
 			}
 		}
-		if rnd := rand.Float64() * SpikeFactor; rnd < nodes[0].Spike {
-			a := rand.Intn(Chunks)
-			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire 0: %d %f\n", i, nodes[0].Spike)
-		} else if rnd < nodes[1].Spike {
-			a := rand.Intn(Chunks)
-			nodes[0].State[a], nodes[1].State[a] = nodes[1].State[a], nodes[0].State[a]
-			fmt.Printf("fire 1: %d %f\n", i, nodes[1].Spike)
+		if network.Neurons[0].Spike > SpikeThreshold {
+			network.Swap(0, 1)
+			fmt.Printf("fire 0: %d %f\n", i, network.Neurons[0].Spike)
+		} else if network.Neurons[1].Spike > SpikeThreshold {
+			network.Swap(0, 1)
+			fmt.Printf("fire 1: %d %f\n", i, network.Neurons[1].Spike)
 		}
-		for n := range nodes {
-			next = nodes[n].Step(next)
-		}
-		points = append(points, plotter.XY{X: float64(i), Y: nodes[0].Spike})
+		network.Step()
+		points = append(points, plotter.XY{X: float64(i), Y: network.Neurons[0].Spike})
 	}
 
 	out, err := os.Create("ca.png")
