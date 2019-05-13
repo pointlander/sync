@@ -100,7 +100,7 @@ func (s BoolSlice) fitness(seed int) float64 {
 }
 
 func (s BoolSlice) Evaluate() (float64, error) {
-	fitness := (s.fitness(1)+s.fitness(2))/2 - .5
+	fitness := (s.fitness(1)+s.fitness(2))/2 - .8
 	//fmt.Println(fitness)
 	return fitness * fitness, nil
 }

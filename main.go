@@ -30,7 +30,7 @@ const (
 	CASize         = Chunks * ChunkSize
 	Alpha          = 0.08
 	SpikeFactor    = 64
-	SpikeThreshold = .33
+	SpikeThreshold = .22
 	NetworkSize    = 7
 )
 
@@ -83,11 +83,7 @@ func (network *Network) Step() {
 }
 
 func (network *Network) Swap(m, n int) {
-	a, neurons := network.Rnd.Intn(Chunks), network.Neurons
-	b := a
-	for m == n && b == a {
-		b = network.Rnd.Intn(Chunks)
-	}
+	a, b, neurons := network.Rnd.Intn(Chunks), network.Rnd.Intn(Chunks), network.Neurons
 	neurons[n].State[a], neurons[m].State[b] = neurons[m].State[b], neurons[n].State[a]
 }
 
