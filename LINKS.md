@@ -13,3 +13,5 @@ https://news.ycombinator.com/item?id=19817373
 https://www.the-scientist.com/features/building-a-silicon-brain-65738  
 https://github.com/colinator/spikeflow  
 
+# An implementation that simulates a wah-wah effect using a damped simple harmonic oscillator and the finite difference time domain method
+https://github.com/mangeshsonawane551/The-Discrete-Oscillator-and-the-Wah-wah-  
