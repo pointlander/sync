@@ -3,7 +3,7 @@ package fixed
 import "testing"
 
 func TestFixed_Mul(t *testing.T) {
-	a := Fixed(1 << 5)
+	a := Fixed(FixedHalf)
 	b := a.Mul(a)
 	if b.Float64() != .25 {
 		t.Fatalf("%s != .25", b)
@@ -13,7 +13,7 @@ func TestFixed_Mul(t *testing.T) {
 var z Fixed
 
 func BenchmarkFixedMul(t *testing.B) {
-	x, y := Fixed(1<<6), Fixed(1<<5)
+	x, y := Fixed(FixedOne), Fixed(FixedHalf)
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
 		z = x.Mul(y)

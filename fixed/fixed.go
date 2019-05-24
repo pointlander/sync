@@ -5,6 +5,8 @@ import "fmt"
 const (
 	// Places is the number of fixed places
 	Places = 6
+	// FixedOne is the number 1
+	FixedOne = 1 << Places
 	// FixedHalf is the number .5
 	FixedHalf = 1 << (Places - 1)
 )
