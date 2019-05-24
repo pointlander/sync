@@ -1,8 +1,6 @@
 package fixed
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestFixed_Mul(t *testing.T) {
 	a := Fixed(1 << 5)
@@ -12,44 +10,38 @@ func TestFixed_Mul(t *testing.T) {
 	}
 }
 
+var z Fixed
+
 func BenchmarkFixedMul(t *testing.B) {
-	a, b, c := make([]Fixed, t.N), make([]Fixed, t.N), make([]Fixed, t.N)
 	x, y := Fixed(1<<6), Fixed(1<<5)
+	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		a[i], b[i] = x, y
+		z = x.Mul(y)
 		x++
 		y++
 	}
-	t.ResetTimer()
-	for i := 0; i < t.N; i++ {
-		c[i] = a[i].Mul(b[i])
-	}
 }
+
+var z32 float32
 
 func BenchmarkMulFloat32(t *testing.B) {
-	a, b, c := make([]float32, t.N), make([]float32, t.N), make([]float32, t.N)
 	x, y := float32(1.0), float32(.5)
-	for i := 0; i < t.N; i++ {
-		a[i], b[i] = x, y
-		x += 1 / 64
-		y += 1 / 64
-	}
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		c[i] = a[i] * b[i]
+		z32 = x * y
+		x += 1 / 64
+		y += 1 / 64
 	}
 }
 
+var z64 float64
+
 func BenchmarkMulFloat64(t *testing.B) {
-	a, b, c := make([]float64, t.N), make([]float64, t.N), make([]float64, t.N)
 	x, y := 1.0, .5
-	for i := 0; i < t.N; i++ {
-		a[i], b[i] = x, y
-		x += 1 / 64
-		y += 1 / 64
-	}
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		c[i] = a[i] * b[i]
+		z64 = x * y
+		x += 1 / 64
+		y += 1 / 64
 	}
 }
