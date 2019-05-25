@@ -15,3 +15,8 @@ https://github.com/colinator/spikeflow
 
 # An implementation that simulates a wah-wah effect using a damped simple harmonic oscillator and the finite difference time domain method
 https://github.com/mangeshsonawane551/The-Discrete-Oscillator-and-the-Wah-wah-  
+
+# Phase transitions: the math behind the music
+https://news.ycombinator.com/item?id=20006010  
+https://thedaily.case.edu/phase-transitions-the-math-behind-the-music/  
+https://advances.sciencemag.org/content/5/5/eaav8490.full  
