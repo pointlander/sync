@@ -10,6 +10,16 @@ func TestFixed_Mul(t *testing.T) {
 	}
 }
 
+func TestFixedFromFloat64(t *testing.T) {
+	vectors := [...]float64{4, -4, 2, -2, .5, -.5, .25, -.25}
+	for _, v := range vectors {
+		a := FixedFromFloat64(v)
+		if b := a.Float64(); b != v {
+			t.Errorf("%f != %f", v, b)
+		}
+	}
+}
+
 var z Fixed
 
 func BenchmarkFixedMul(t *testing.B) {
