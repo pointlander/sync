@@ -11,7 +11,7 @@ import (
 
 const (
 	// Places is the number of fixed places
-	Places = 6
+	Places = 16
 	// FixedOne is the number 1
 	FixedOne = 1 << Places
 	// FixedHalf is the number .5
@@ -21,72 +21,49 @@ const (
 // Fixed is a fixed point number
 type Fixed int32
 
-var factors [31]float64
+// FixedFromFloat32 creates a fixed point number from a float32
+func FixedFloat32(a float32) Fixed {
+	round := float32(.5)
+	if a < 0 {
+		round = -0.5
+	}
+	b := a*FixedOne + round
+	if b > math.MaxInt32 {
+		panic(fmt.Errorf("float is too big: %f", a))
+	} else if b < math.MinInt32 {
+		panic(fmt.Errorf("float is too small %f", a))
+	}
+	return Fixed(b)
+}
 
-func init() {
-	factor := 2
-	for i := uint(0); i < Places; i++ {
-		factors[Places-1-i] = 1 / float64(factor)
-		factor *= 2
+// FixedFromFloat64 creates a fixed point number from a float64
+func FixedFloat64(a float64) Fixed {
+	round := .5
+	if a < 0 {
+		round = -0.5
 	}
-	factor = 1
-	for i := uint(Places); i < 31; i++ {
-		factors[i] = float64(factor)
-		factor *= 2
+	b := a*FixedOne + round
+	if b > math.MaxInt32 {
+		panic(fmt.Errorf("float is too big: %f", a))
+	} else if b < math.MinInt32 {
+		panic(fmt.Errorf("float is too small %f", a))
 	}
+	return Fixed(b)
+}
+
+// Float32 converts the fixed number to a float64
+func (f Fixed) Float32() float32 {
+	return float32(f) / FixedOne
 }
 
 // Float64 converts the fixed number to a float64
 func (f Fixed) Float64() float64 {
-	value, sign := .0, false
-	if f < 0 {
-		f, sign = -f, true
-	}
-	for _, v := range factors {
-		if f&1 == 1 {
-			value += v
-		}
-		f >>= 1
-	}
-	if sign {
-		value = -value
-	}
-	return value
+	return float64(f) / FixedOne
 }
 
 // String converts the fixed point number to a string
 func (f Fixed) String() string {
-	return fmt.Sprintf("%f", f.Float64())
-}
-
-const (
-	// Float64ExponentMask is the float64 exponent mask
-	Float64ExponentMask = 1<<11 - 1
-	// Float64FractionMask is the float64 fraction mask
-	Float64FractionMask = 1<<52 - 1
-	// Float64Bias is the float64 exponent bias
-	Float64Bias = 1<<10 - 1
-	// Fixed32Mask is the fixed mask
-	Fixed32Mask = 1<<32 - 1
-)
-
-// FixedFromFloat64 creates a fixed point number from a float64
-func FixedFromFloat64(a float64) Fixed {
-	bits := math.Float64bits(a)
-	sign := bits >> 63
-	exponent := int((bits>>52)&Float64ExponentMask) - Float64Bias
-	fraction := bits&Float64FractionMask | 1<<53
-	if exponent > (32 - Places) {
-		panic("exponent is too larger")
-	} else if exponent < -Places {
-		panic("exponent is too small")
-	}
-	shift := uint(53 - exponent - Places)
-	fixed := Fixed((fraction >> shift) & Fixed32Mask)
-	if sign != 0 {
-		fixed = -fixed
-	}
-	return fixed
+	return fmt.Sprintf("%f", f.Float32())
 }
 
 // Mul multiplys to fixed point nuimbers

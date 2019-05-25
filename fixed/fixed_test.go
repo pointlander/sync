@@ -6,21 +6,31 @@ package fixed
 
 import "testing"
 
+func TestFixedFloat32(t *testing.T) {
+	vectors := [...]float32{4, -4, 2, -2, .5, -.5, .25, -.25}
+	for _, v := range vectors {
+		a := FixedFloat32(v)
+		if b := a.Float32(); b != v {
+			t.Errorf("%f != %f", v, b)
+		}
+	}
+}
+
+func TestFixedFloat64(t *testing.T) {
+	vectors := [...]float64{4, -4, 2, -2, .5, -.5, .25, -.25}
+	for _, v := range vectors {
+		a := FixedFloat64(v)
+		if b := a.Float64(); b != v {
+			t.Errorf("%f != %f", v, b)
+		}
+	}
+}
+
 func TestFixed_Mul(t *testing.T) {
 	a := Fixed(FixedHalf)
 	b := a.Mul(a)
 	if b.Float64() != .25 {
 		t.Fatalf("%s != .25", b)
-	}
-}
-
-func TestFixedFromFloat64(t *testing.T) {
-	vectors := [...]float64{4, -4, 2, -2, .5, -.5, .25, -.25}
-	for _, v := range vectors {
-		a := FixedFromFloat64(v)
-		if b := a.Float64(); b != v {
-			t.Errorf("%f != %f", v, b)
-		}
 	}
 }
 

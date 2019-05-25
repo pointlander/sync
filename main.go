@@ -14,6 +14,8 @@ import (
 	"math/rand"
 	"os"
 
+	"github.com/pointlander/sync/fixed"
+
 	"github.com/MaxHalford/eaopt"
 	"gitlab.com/gomidi/midi/mid"
 	"gitlab.com/gomidi/midi/smf"
@@ -316,5 +318,47 @@ func main() {
 	if *options.inference {
 		inference()
 		return
+	}
+
+	points := make(plotter.XYs, 0, 1024)
+
+	Fs := 44100.0
+	f0 := 20.0
+	x0 := 3.0
+	v0 := 0.6
+	T := 1 / Fs
+	w0 := 2 * math.Pi * f0
+	if T >= 2/w0 {
+		panic("This is unstable")
+	}
+	coefficient1 := 2 - (T*T)*(w0*w0)
+
+	x1 := fixed.FixedFloat64(x0)
+	x2 := fixed.FixedFloat64(x0 + T*v0)
+	c := fixed.FixedFloat64(coefficient1)
+	fmt.Printf("%s %s %s\n", x1, x2, c)
+	for i := 0; i < 10000; i++ {
+		x1, x2 = x2, c.Mul(x2)-x1
+		points = append(points, plotter.XY{X: float64(i), Y: x2.Float64()})
+	}
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = "state"
+	p.X.Label.Text = "time"
+	p.Y.Label.Text = "state"
+
+	scatter, err := plotter.NewLine(points)
+	if err != nil {
+		panic(err)
+	}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "harmonic_oscillator.png")
+	if err != nil {
+		panic(err)
 	}
 }
