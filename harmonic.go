@@ -206,7 +206,7 @@ func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
 			if rnd.Intn(2) == 0 {
 				connections[k] = 255
 			} else {
-				connections[k] = uint8(rnd.Intn(256))
+				connections[k] = uint8(rnd.Intn(255))
 			}
 			k++
 		}
