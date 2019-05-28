@@ -40,11 +40,13 @@ var options = struct {
 	bench     *bool
 	learn     *bool
 	inference *bool
+	mode      *string
 	net       *string
 }{
 	bench:     flag.Bool("bench", false, "run the test bench"),
 	learn:     flag.Bool("learn", false, "learn a network"),
 	inference: flag.Bool("inference", false, "run inference on a network"),
+	mode:      flag.String("mode", "harmonic", "harmonic or cellular"),
 	net:       flag.String("net", "", "net file to load"),
 }
 
@@ -62,7 +64,7 @@ var (
 	MaxMarkov  = 2 * MaxEntropy
 )
 
-func bench() {
+func cellularBench() {
 	network := NewNetwork(1, 2)
 	iterations := 12000
 	points := make(plotter.XYs, 0, iterations)
@@ -133,7 +135,7 @@ func bench() {
 	}
 }
 
-func learn() {
+func cellularLearn() {
 	ga, err := eaopt.NewDefaultGAConfig().NewGA()
 	if err != nil {
 		panic(err)
@@ -168,7 +170,7 @@ func learn() {
 
 }
 
-func inference() {
+func cellularInference() {
 	out, err := os.Create("music.midi")
 	if err != nil {
 		panic(err)
@@ -302,24 +304,7 @@ func inference() {
 	}
 }
 
-func main() {
-	flag.Parse()
-
-	if *options.bench {
-		bench()
-		return
-	}
-
-	if *options.learn {
-		learn()
-		return
-	}
-
-	if *options.inference {
-		inference()
-		return
-	}
-
+func harmonicBench() {
 	points := make(plotter.XYs, 0, 1024)
 
 	Fs := 44100.0
@@ -360,5 +345,79 @@ func main() {
 	err = p.Save(8*vg.Inch, 8*vg.Inch, "harmonic_oscillator.png")
 	if err != nil {
 		panic(err)
+	}
+}
+
+func harmonicLearn() {
+	ga, err := eaopt.NewDefaultGAConfig().NewGA()
+	if err != nil {
+		panic(err)
+	}
+
+	ga.NGenerations = 25
+	ga.RNG = rand.New(rand.NewSource(1))
+	ga.ParallelEval = true
+	ga.PopSize = 100
+
+	ga.Callback = func(ga *eaopt.GA) {
+		fmt.Printf("Best fitness at generation %d: %f\n", ga.Generations, ga.HallOfFame[0].Fitness)
+		fmt.Println(ga.HallOfFame[0].Genome.(*HarmonicGenome).Connections.String())
+	}
+
+	err = ga.Minimize(HarmonicGenomeFactory)
+	if err != nil {
+		panic(err)
+	}
+
+	best := ga.HallOfFame[0].Genome.(*HarmonicGenome)
+	best.Write("best_harmonic.net")
+}
+
+func harmonicInference() {
+	if *options.net == "" {
+		panic("net file required")
+	}
+	genome := ReadHarmonicGenome(*options.net)
+	network := genome.NewHarmonicNetwork()
+	for i := range network {
+		fmt.Println(i)
+		fmt.Println(network[i].States)
+		fmt.Println(network[i].Weights)
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	if *options.mode == "cellular" {
+		if *options.bench {
+			cellularBench()
+			return
+		}
+
+		if *options.learn {
+			cellularLearn()
+			return
+		}
+
+		if *options.inference {
+			cellularInference()
+			return
+		}
+	} else if *options.mode == "harmonic" {
+		if *options.bench {
+			harmonicBench()
+			return
+		}
+
+		if *options.learn {
+			harmonicLearn()
+			return
+		}
+
+		if *options.inference {
+			harmonicInference()
+			return
+		}
 	}
 }
