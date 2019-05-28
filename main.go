@@ -370,15 +370,19 @@ func harmonicLearn() {
 	}
 
 	best := ga.HallOfFame[0].Genome.(*HarmonicGenome)
-	out, err := os.Create("best_harmonic.net")
-	if err != nil {
-		panic(err)
+	best.Write("best_harmonic.net")
+}
+
+func harmonicInference() {
+	if *options.net == "" {
+		panic("net file required")
 	}
-	defer out.Close()
-	encoder := gob.NewEncoder(out)
-	err = encoder.Encode(best)
-	if err != nil {
-		panic(err)
+	genome := ReadHarmonicGenome(*options.net)
+	network := genome.NewHarmonicNetwork()
+	for i := range network {
+		fmt.Println(i)
+		fmt.Println(network[i].States)
+		fmt.Println(network[i].Weights)
 	}
 }
 
@@ -405,9 +409,14 @@ func main() {
 			harmonicBench()
 			return
 		}
-				
+
 		if *options.learn {
 			harmonicLearn()
+			return
+		}
+
+		if *options.inference {
+			harmonicInference()
 			return
 		}
 	}

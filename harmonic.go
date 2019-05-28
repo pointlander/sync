@@ -5,7 +5,9 @@
 package main
 
 import (
+	"encoding/gob"
 	"math/rand"
+	"os"
 
 	"github.com/pointlander/sync/fixed"
 
@@ -195,6 +197,34 @@ func (g *HarmonicGenome) Clone() eaopt.Genome {
 		States:      states,
 		Weights:     weights,
 	}
+}
+
+func (g *HarmonicGenome) Write(name string) {
+	out, err := os.Create(name)
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	encoder := gob.NewEncoder(out)
+	err = encoder.Encode(g)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func ReadHarmonicGenome(name string) *HarmonicGenome {
+	genome := HarmonicGenome{}
+	in, err := os.Open(name)
+	if err != nil {
+		panic(err)
+	}
+	defer in.Close()
+	decoder := gob.NewDecoder(in)
+	err = decoder.Decode(&genome)
+	if err != nil {
+		panic(err)
+	}
+	return &genome
 }
 
 // HarmonicGenomeFactory create a new harmonic genome
