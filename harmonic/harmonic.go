@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package harmonic
 
 import (
 	"encoding/gob"
@@ -10,6 +10,8 @@ import (
 	"os"
 
 	"github.com/pointlander/sync/fixed"
+	"github.com/pointlander/sync/slices"
+	"github.com/pointlander/sync/util"
 
 	"github.com/MaxHalford/eaopt"
 )
@@ -38,9 +40,9 @@ type Harmonic struct {
 
 // HarmonicGenome is a genome representing the parameters of a harmonic network
 type HarmonicGenome struct {
-	Connections Uint8Slice
-	States      FixedSlice
-	Weights     FixedSlice
+	Connections slices.Uint8Slice
+	States      slices.FixedSlice
+	Weights     slices.FixedSlice
 }
 
 // HarmonicNetwork is a network of harmonic nodes
@@ -159,7 +161,7 @@ func (h HarmonicNetwork) Step() (notes []uint8) {
 
 // Evaluate computes the fitness of the harmonic genome
 func (g *HarmonicGenome) Evaluate() (float64, error) {
-	network, markov := g.NewHarmonicNetwork(), Markov{}
+	network, markov := g.NewHarmonicNetwork(), util.Markov{}
 	for i := 0; i < 10000; i++ {
 		notes := network.Step()
 		for _, note := range notes {
@@ -186,9 +188,9 @@ func (g *HarmonicGenome) Crossover(r eaopt.Genome, rng *rand.Rand) {
 
 // Clone produces a copy of a harmonic genome
 func (g *HarmonicGenome) Clone() eaopt.Genome {
-	connections := make(Uint8Slice, len(g.Connections))
-	states := make(FixedSlice, len(g.States))
-	weights := make(FixedSlice, len(g.Weights))
+	connections := make(slices.Uint8Slice, len(g.Connections))
+	states := make(slices.FixedSlice, len(g.States))
+	weights := make(slices.FixedSlice, len(g.Weights))
 	copy(connections, g.Connections)
 	copy(states, g.States)
 	copy(weights, g.Weights)
@@ -229,7 +231,7 @@ func ReadHarmonicGenome(name string) *HarmonicGenome {
 
 // HarmonicGenomeFactory create a new harmonic genome
 func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
-	connections := make(Uint8Slice, NetworkSize*NetworkSize)
+	connections := make(slices.Uint8Slice, NetworkSize*NetworkSize)
 	k := 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < NetworkSize; j++ {
@@ -241,14 +243,14 @@ func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
 			k++
 		}
 	}
-	states := make(FixedSlice, 2*NetworkSize)
+	states := make(slices.FixedSlice, 2*NetworkSize)
 	for i := range states {
 		states[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {
 			states[i] = -states[i]
 		}
 	}
-	weights := make(FixedSlice, 4*NetworkSize)
+	weights := make(slices.FixedSlice, 4*NetworkSize)
 	for i := range weights {
 		weights[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {
