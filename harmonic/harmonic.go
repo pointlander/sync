@@ -40,9 +40,9 @@ type Harmonic struct {
 
 // HarmonicGenome is a genome representing the parameters of a harmonic network
 type HarmonicGenome struct {
-	Connections slices.Uint8Slice
-	States      slices.FixedSlice
-	Weights     slices.FixedSlice
+	Connections slices.Uint8
+	States      slices.Fixed
+	Weights     slices.Fixed
 }
 
 // HarmonicNetwork is a network of harmonic nodes
@@ -188,9 +188,9 @@ func (g *HarmonicGenome) Crossover(r eaopt.Genome, rng *rand.Rand) {
 
 // Clone produces a copy of a harmonic genome
 func (g *HarmonicGenome) Clone() eaopt.Genome {
-	connections := make(slices.Uint8Slice, len(g.Connections))
-	states := make(slices.FixedSlice, len(g.States))
-	weights := make(slices.FixedSlice, len(g.Weights))
+	connections := make(slices.Uint8, len(g.Connections))
+	states := make(slices.Fixed, len(g.States))
+	weights := make(slices.Fixed, len(g.Weights))
 	copy(connections, g.Connections)
 	copy(states, g.States)
 	copy(weights, g.Weights)
@@ -231,7 +231,7 @@ func ReadHarmonicGenome(name string) *HarmonicGenome {
 
 // HarmonicGenomeFactory create a new harmonic genome
 func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
-	connections := make(slices.Uint8Slice, NetworkSize*NetworkSize)
+	connections := make(slices.Uint8, NetworkSize*NetworkSize)
 	k := 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < NetworkSize; j++ {
@@ -243,14 +243,14 @@ func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
 			k++
 		}
 	}
-	states := make(slices.FixedSlice, 2*NetworkSize)
+	states := make(slices.Fixed, 2*NetworkSize)
 	for i := range states {
 		states[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {
 			states[i] = -states[i]
 		}
 	}
-	weights := make(slices.FixedSlice, 4*NetworkSize)
+	weights := make(slices.Fixed, 4*NetworkSize)
 	for i := range weights {
 		weights[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {

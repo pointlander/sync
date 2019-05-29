@@ -14,8 +14,8 @@ import (
 )
 
 type Net struct {
-	Connections slices.BoolSlice
-	Thresholds  slices.Float64Slice
+	Connections slices.Bool
+	Thresholds  slices.Float64
 }
 
 func (n *Net) fitness(seed int) float64 {
@@ -75,8 +75,8 @@ func (n *Net) Crossover(r eaopt.Genome, rng *rand.Rand) {
 }
 
 func (n *Net) Clone() eaopt.Genome {
-	connections := make(slices.BoolSlice, len(n.Connections))
-	thresholds := make(slices.Float64Slice, len(n.Thresholds))
+	connections := make(slices.Bool, len(n.Connections))
+	thresholds := make(slices.Float64, len(n.Thresholds))
 	copy(connections, n.Connections)
 	copy(thresholds, n.Thresholds)
 	return &Net{
@@ -86,7 +86,7 @@ func (n *Net) Clone() eaopt.Genome {
 }
 
 func NetFactory(rnd *rand.Rand) eaopt.Genome {
-	connections := make(slices.BoolSlice, NetworkSize*NetworkSize)
+	connections := make(slices.Bool, NetworkSize*NetworkSize)
 	k := 0
 	for i := 0; i < NetworkSize; i++ {
 		for j := 0; j < NetworkSize; j++ {
@@ -94,7 +94,7 @@ func NetFactory(rnd *rand.Rand) eaopt.Genome {
 			k++
 		}
 	}
-	thresholds := make(slices.Float64Slice, NetworkSize)
+	thresholds := make(slices.Float64, NetworkSize)
 	for i := range thresholds {
 		thresholds[i] = rnd.Float64()
 	}
