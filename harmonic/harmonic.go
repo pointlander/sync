@@ -109,7 +109,7 @@ func (h *Harmonic) Step() bool {
 		states[0] += weights[2].Mul(sum / fixed.Fixed(count))
 	}
 	fired := false
-	if states[0] > weights[3] {
+	if states[0].Abs() > weights[3] {
 		fired = true
 		for i := range outbox {
 			outbox[i].Send(states[0])
@@ -157,11 +157,7 @@ func (h HarmonicNetwork) Step() (notes []uint8) {
 	)
 	for i := range h {
 		if h[i].Step() {
-			state := h[i].States[0]
-			if state < 0 {
-				state = -state
-			}
-			if state > max {
+			if state := h[i].States[0].Abs(); state > max {
 				max, note = state, h[i].Note
 			}
 		}

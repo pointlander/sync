@@ -124,11 +124,12 @@ func Inference(name string) {
 		plots[i] = make(plotter.XYs, 0, 1024)
 	}
 	for i := 0; i < 10000; i++ {
+		notes := network.Step()
+		for _, note := range notes {
+			fmt.Printf(" %d", note)
+		}
 		for j := range network {
-			if network[j].Step() {
-				fmt.Printf(" %d", network[j].Note)
-				plots[j] = append(plots[j], plotter.XY{X: float64(i), Y: network[j].States[0].Float64()})
-			}
+			plots[j] = append(plots[j], plotter.XY{X: float64(i), Y: network[j].States[0].Float64()})
 		}
 	}
 	fmt.Printf("\n")
