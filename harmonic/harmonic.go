@@ -151,10 +151,23 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 
 // Step steps the state of the harmonic network
 func (h HarmonicNetwork) Step() (notes []uint8) {
+	var (
+		max fixed.Fixed
+		note uint8
+	)
 	for i := range h {
 		if h[i].Step() {
-			notes = append(notes, h[i].Note)
+			state := h[i].States[0]
+			if state < 0 {
+				state = -state
+			}
+			if state > max {
+				max, note = state, h[i].Note
+			}
 		}
+	}
+	if note != 0 {
+		notes = append(notes, note)
 	}
 	return notes
 }
@@ -168,7 +181,7 @@ func (g *HarmonicGenome) Evaluate() (float64, error) {
 			markov.Add(note)
 		}
 	}
-	fitness := markov.Entropy()/MaxMarkov - .8
+	fitness := markov.Entropy()/MaxMarkov - .4
 	return fitness * fitness, nil
 }
 

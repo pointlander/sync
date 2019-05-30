@@ -85,7 +85,7 @@ func Learn() {
 		panic(err)
 	}
 
-	ga.NGenerations = 25
+	ga.NGenerations = 200
 	ga.RNG = rand.New(rand.NewSource(1))
 	ga.ParallelEval = true
 	ga.PopSize = 100
@@ -93,6 +93,9 @@ func Learn() {
 	ga.Callback = func(ga *eaopt.GA) {
 		fmt.Printf("Best fitness at generation %d: %f\n", ga.Generations, ga.HallOfFame[0].Fitness)
 		fmt.Println(ga.HallOfFame[0].Genome.(*HarmonicGenome).Connections.String())
+	}
+	ga.EarlyStop = func(ga *eaopt.GA) bool {
+		return ga.HallOfFame[0].Fitness < 0.00001
 	}
 
 	err = ga.Minimize(HarmonicGenomeFactory)
@@ -114,5 +117,40 @@ func Inference(name string) {
 		fmt.Println(i)
 		fmt.Println(network[i].States)
 		fmt.Println(network[i].Weights)
+	}
+
+	plots := make([]plotter.XYs, len(network))
+	for i := range plots {
+		plots[i] = make(plotter.XYs, 0, 1024)
+	}
+	for i := 0; i < 10000; i++ {
+		for j := range network {
+			if network[j].Step() {
+				fmt.Printf(" %d", network[j].Note)
+				plots[j] = append(plots[j], plotter.XY{X: float64(i), Y: network[j].States[0].Float64()})
+			}
+		}
+	}
+	fmt.Printf("\n")
+	for i := range plots {
+		p, err := plot.New()
+		if err != nil {
+			panic(err)
+		}
+
+		p.Title.Text = "state"
+		p.X.Label.Text = "time"
+		p.Y.Label.Text = "state"
+
+		scatter, err := plotter.NewLine(plots[i])
+		if err != nil {
+			panic(err)
+		}
+		p.Add(scatter)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("harmonic_oscillator_node_%d.png", i))
+		if err != nil {
+			panic(err)
+		}
 	}
 }
