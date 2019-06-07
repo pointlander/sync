@@ -152,7 +152,7 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 // Step steps the state of the harmonic network
 func (h HarmonicNetwork) Step() (notes []uint8) {
 	var (
-		max fixed.Fixed
+		max  fixed.Fixed
 		note uint8
 	)
 	for i := range h {

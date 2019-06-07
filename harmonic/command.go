@@ -7,14 +7,17 @@ package harmonic
 import (
 	"fmt"
 	"math"
+	"math/cmplx"
 	"math/rand"
 
 	"github.com/pointlander/sync/fixed"
 
 	"github.com/MaxHalford/eaopt"
+	"github.com/mjibson/go-dsp/fft"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
@@ -107,6 +110,8 @@ func Learn() {
 	best.Write("best_harmonic.net")
 }
 
+const Iterations = 10000
+
 func Inference(name string) {
 	if name == "" {
 		panic("net file required")
@@ -119,21 +124,31 @@ func Inference(name string) {
 		fmt.Println(network[i].Weights)
 	}
 
-	plots := make([]plotter.XYs, len(network))
-	for i := range plots {
-		plots[i] = make(plotter.XYs, 0, 1024)
+	data := make([][]float64, len(network))
+	for i := range data {
+		data[i] = make([]float64, 0, Iterations)
 	}
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < Iterations; i++ {
 		notes := network.Step()
 		for _, note := range notes {
 			fmt.Printf(" %d", note)
 		}
 		for j := range network {
-			plots[j] = append(plots[j], plotter.XY{X: float64(i), Y: network[j].States[0].Float64()})
+			data[j] = append(data[j], network[j].States[0].Float64())
 		}
 	}
 	fmt.Printf("\n")
-	for i := range plots {
+	points := make(plotter.XYs, Iterations)
+	for i, values := range data {
+		fmt.Printf("graphing plot %d\n", i)
+
+		for j, value := range values {
+			points[j] = plotter.XY{
+				X: float64(j),
+				Y: value,
+			}
+		}
+
 		p, err := plot.New()
 		if err != nil {
 			panic(err)
@@ -143,13 +158,45 @@ func Inference(name string) {
 		p.X.Label.Text = "time"
 		p.Y.Label.Text = "state"
 
-		scatter, err := plotter.NewLine(plots[i])
+		scatter, err := plotter.NewScatter(points)
 		if err != nil {
 			panic(err)
 		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
 		p.Add(scatter)
 
 		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("harmonic_oscillator_node_%d.png", i))
+		if err != nil {
+			panic(err)
+		}
+
+		spectrum := fft.FFTReal(values)
+		for j, value := range spectrum {
+			points[j] = plotter.XY{
+				X: float64(j),
+				Y: cmplx.Abs(value),
+			}
+		}
+
+		p, err = plot.New()
+		if err != nil {
+			panic(err)
+		}
+
+		p.Title.Text = "spectrum"
+		p.X.Label.Text = "frequency"
+		p.Y.Label.Text = "energy"
+
+		scatter, err = plotter.NewScatter(points)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(scatter)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("harmonic_oscillator_node_%d_spectrum.png", i))
 		if err != nil {
 			panic(err)
 		}
