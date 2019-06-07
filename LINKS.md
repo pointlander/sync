@@ -20,3 +20,6 @@ https://github.com/mangeshsonawane551/The-Discrete-Oscillator-and-the-Wah-wah-
 https://news.ycombinator.com/item?id=20006010  
 https://thedaily.case.edu/phase-transitions-the-math-behind-the-music/  
 https://advances.sciencemag.org/content/5/5/eaav8490.full  
+
+# Digital Signal Processing for Go
+https://github.com/mjibson/go-dsp  
