@@ -23,3 +23,6 @@ https://advances.sciencemag.org/content/5/5/eaav8490.full
 
 # Digital Signal Processing for Go
 https://github.com/mjibson/go-dsp  
+
+# What is frequency-domain entropy in FFT result and how to calculate it?
+https://stackoverflow.com/questions/30418391/what-is-frequency-domain-entropy-in-fft-result-and-how-to-calculate-it  

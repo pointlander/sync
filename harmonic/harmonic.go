@@ -16,6 +16,8 @@ import (
 	"github.com/MaxHalford/eaopt"
 )
 
+const Threshold = 8 * fixed.FixedOne
+
 // Message is a message sent from one harmonic node to another harmonic node
 type Message struct {
 	Delay uint8
@@ -109,10 +111,14 @@ func (h *Harmonic) Step() bool {
 		states[0] += weights[2].Mul(sum / fixed.Fixed(count))
 	}
 	fired := false
-	if states[0].Abs() > weights[3] {
+	if states[0].Abs() > weights[3].Abs() {
 		fired = true
+		threshold := fixed.Fixed(Threshold)
+		if states[0] < 0 {
+			threshold = -threshold
+		}
 		for i := range outbox {
-			outbox[i].Send(states[0])
+			outbox[i].Send(threshold)
 		}
 	}
 	h.States = states
@@ -138,10 +144,11 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 			network[i].States[j] = g.States[s]
 			s++
 		}
-		for j := range network[i].Weights {
+		for j := range network[i].Weights[:3] {
 			network[i].Weights[j] = g.Weights[w]
 			w++
 		}
+		network[i].Weights[3] = Threshold
 	}
 	for i, note := range Notes {
 		network[i].Note = note
@@ -259,7 +266,7 @@ func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
 			states[i] = -states[i]
 		}
 	}
-	weights := make(slices.Fixed, 4*NetworkSize)
+	weights := make(slices.Fixed, 3*NetworkSize)
 	for i := range weights {
 		weights[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {

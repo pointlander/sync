@@ -22,6 +22,7 @@ import (
 
 const (
 	NetworkSize = 7
+	Iterations  = 10000
 )
 
 var (
@@ -34,8 +35,9 @@ var (
 		69,
 		71,
 	}
-	MaxEntropy = math.Log2(float64(len(Notes)))
-	MaxMarkov  = 2 * MaxEntropy
+	MaxEntropy         = math.Log2(float64(len(Notes)))
+	MaxMarkov          = 2 * MaxEntropy
+	MaxSpectrumEntropy = math.Log(Iterations)
 )
 
 func Bench() {
@@ -110,7 +112,21 @@ func Learn() {
 	best.Write("best_harmonic.net")
 }
 
-const Iterations = 10000
+func Entropy(values []complex128) (entropy float64) {
+	length, total := len(values), 0.0
+	probability, n := make([]float64, 0, length), float64(length)
+	for _, value := range values {
+		a, b := real(value), imag(value)
+		p := (a*a + b*b) / n
+		total += p
+		probability = append(probability, p)
+	}
+	for _, p := range probability {
+		p /= total
+		entropy += p * math.Log(p)
+	}
+	return -entropy
+}
 
 func Inference(name string) {
 	if name == "" {
@@ -138,6 +154,7 @@ func Inference(name string) {
 		}
 	}
 	fmt.Printf("\n")
+
 	points := make(plotter.XYs, Iterations)
 	for i, values := range data {
 		fmt.Printf("graphing plot %d\n", i)
@@ -178,6 +195,8 @@ func Inference(name string) {
 				Y: cmplx.Abs(value),
 			}
 		}
+		entropy := Entropy(spectrum)
+		fmt.Println("entopy=", entropy/MaxSpectrumEntropy)
 
 		p, err = plot.New()
 		if err != nil {
