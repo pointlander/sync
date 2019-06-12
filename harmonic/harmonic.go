@@ -14,6 +14,7 @@ import (
 	"github.com/pointlander/sync/util"
 
 	"github.com/MaxHalford/eaopt"
+	"github.com/mjibson/go-dsp/fft"
 )
 
 const Threshold = 8 * fixed.FixedOne
@@ -157,14 +158,18 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 }
 
 // Step steps the state of the harmonic network
-func (h HarmonicNetwork) Step() (notes []uint8) {
+func (h HarmonicNetwork) Step(states [][]float64) (notes []uint8) {
 	var (
 		max  fixed.Fixed
 		note uint8
 	)
 	for i := range h {
 		if h[i].Step() {
-			if state := h[i].States[0].Abs(); state > max {
+			state := h[i].States[0]
+			if states != nil {
+				states[i] = append(states[i], state.Float64())
+			}
+			if state := state.Abs(); state > max {
 				max, note = state, h[i].Note
 			}
 		}
@@ -178,14 +183,24 @@ func (h HarmonicNetwork) Step() (notes []uint8) {
 // Evaluate computes the fitness of the harmonic genome
 func (g *HarmonicGenome) Evaluate() (float64, error) {
 	network, markov := g.NewHarmonicNetwork(), util.Markov{}
-	for i := 0; i < 10000; i++ {
-		notes := network.Step()
+	data := make([][]float64, len(network))
+	for i := range data {
+		data[i] = make([]float64, 0, Iterations)
+	}
+	for i := 0; i < Iterations; i++ {
+		notes := network.Step(data)
 		for _, note := range notes {
 			markov.Add(note)
 		}
 	}
-	fitness := markov.Entropy()/MaxMarkov - .4
-	return fitness * fitness, nil
+	sum := 0.0
+	for _, values := range data {
+		fit := Entropy(fft.FFTReal(values))/MaxSpectrumEntropy - .5
+		sum += fit * fit
+	}
+	fitness := sum / float64(len(network))
+	//fitness := markov.Entropy()/MaxMarkov - .4
+	return fitness, nil
 }
 
 // Mutate mutates the harmonic genome

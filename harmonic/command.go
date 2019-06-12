@@ -145,12 +145,9 @@ func Inference(name string) {
 		data[i] = make([]float64, 0, Iterations)
 	}
 	for i := 0; i < Iterations; i++ {
-		notes := network.Step()
+		notes := network.Step(data)
 		for _, note := range notes {
 			fmt.Printf(" %d", note)
-		}
-		for j := range network {
-			data[j] = append(data[j], network[j].States[0].Float64())
 		}
 	}
 	fmt.Printf("\n")
