@@ -165,13 +165,13 @@ func (h HarmonicNetwork) Step(states [][]float64) (notes []uint8) {
 	)
 	for i := range h {
 		if h[i].Step() {
-			state := h[i].States[0]
-			if states != nil {
-				states[i] = append(states[i], state.Float64())
-			}
-			if state := state.Abs(); state > max {
+			if state := h[i].States[0].Abs(); state > max {
 				max, note = state, h[i].Note
 			}
+		}
+		state := h[i].States[0]
+		if states != nil {
+			states[i] = append(states[i], state.Float64())
 		}
 	}
 	if note != 0 {
