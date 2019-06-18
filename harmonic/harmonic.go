@@ -14,7 +14,10 @@ import (
 	"github.com/pointlander/sync/util"
 
 	"github.com/MaxHalford/eaopt"
+	"github.com/mjibson/go-dsp/fft"
 )
+
+const Threshold = 8 * fixed.FixedOne
 
 // Message is a message sent from one harmonic node to another harmonic node
 type Message struct {
@@ -109,10 +112,14 @@ func (h *Harmonic) Step() bool {
 		states[0] += weights[2].Mul(sum / fixed.Fixed(count))
 	}
 	fired := false
-	if states[0] > weights[3] {
+	if states[0].Abs() > weights[3].Abs() {
 		fired = true
+		threshold := fixed.Fixed(Threshold)
+		if states[0] < 0 {
+			threshold = -threshold
+		}
 		for i := range outbox {
-			outbox[i].Send(states[0])
+			outbox[i].Send(threshold)
 		}
 	}
 	h.States = states
@@ -138,10 +145,11 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 			network[i].States[j] = g.States[s]
 			s++
 		}
-		for j := range network[i].Weights {
+		for j := range network[i].Weights[:3] {
 			network[i].Weights[j] = g.Weights[w]
 			w++
 		}
+		network[i].Weights[3] = Threshold
 	}
 	for i, note := range Notes {
 		network[i].Note = note
@@ -150,11 +158,24 @@ func (g *HarmonicGenome) NewHarmonicNetwork() HarmonicNetwork {
 }
 
 // Step steps the state of the harmonic network
-func (h HarmonicNetwork) Step() (notes []uint8) {
+func (h HarmonicNetwork) Step(states [][]float64) (notes []uint8) {
+	var (
+		max  fixed.Fixed
+		note uint8
+	)
 	for i := range h {
 		if h[i].Step() {
-			notes = append(notes, h[i].Note)
+			if state := h[i].States[0].Abs(); state > max {
+				max, note = state, h[i].Note
+			}
 		}
+		state := h[i].States[0]
+		if states != nil {
+			states[i] = append(states[i], state.Float64())
+		}
+	}
+	if note != 0 {
+		notes = append(notes, note)
 	}
 	return notes
 }
@@ -162,14 +183,24 @@ func (h HarmonicNetwork) Step() (notes []uint8) {
 // Evaluate computes the fitness of the harmonic genome
 func (g *HarmonicGenome) Evaluate() (float64, error) {
 	network, markov := g.NewHarmonicNetwork(), util.Markov{}
-	for i := 0; i < 10000; i++ {
-		notes := network.Step()
+	data := make([][]float64, len(network))
+	for i := range data {
+		data[i] = make([]float64, 0, Iterations)
+	}
+	for i := 0; i < Iterations; i++ {
+		notes := network.Step(data)
 		for _, note := range notes {
 			markov.Add(note)
 		}
 	}
-	fitness := markov.Entropy()/MaxMarkov - .8
-	return fitness * fitness, nil
+	sum := 0.0
+	for _, values := range data {
+		fit := Entropy(fft.FFTReal(values))/MaxSpectrumEntropy - .5
+		sum += fit * fit
+	}
+	fitness := sum / float64(len(network))
+	//fitness := markov.Entropy()/MaxMarkov - .4
+	return fitness, nil
 }
 
 // Mutate mutates the harmonic genome
@@ -250,7 +281,7 @@ func HarmonicGenomeFactory(rnd *rand.Rand) eaopt.Genome {
 			states[i] = -states[i]
 		}
 	}
-	weights := make(slices.Fixed, 4*NetworkSize)
+	weights := make(slices.Fixed, 3*NetworkSize)
 	for i := range weights {
 		weights[i] = fixed.Fixed(rnd.Intn(8 << fixed.Places))
 		if rnd.Intn(2) == 0 {

@@ -66,6 +66,14 @@ func (f Fixed) String() string {
 	return fmt.Sprintf("%f", f.Float32())
 }
 
+// Abs returns the absolute value
+func (f Fixed) Abs() Fixed {
+	if f < 0 {
+		return -f
+	}
+	return f
+}
+
 // Mul multiplys to fixed point nuimbers
 func (f Fixed) Mul(b Fixed) Fixed {
 	return Fixed((int64(f)*int64(b) + FixedHalf) >> Places)
